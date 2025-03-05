@@ -1,35 +1,127 @@
-# expo-translate-text
+# expo-translate-text 🌍
 
-My new module
+`expo-translate-text` is a React Native module for translating text using platform-specific translation APIs. It leverages Apple's **[iOS Translation API](https://developer.apple.com/documentation/translation)** (with **Translation Sheet** available in **iOS 17.4+**) and **[Google ML Kit](https://developers.google.com/ml-kit/language/translation/overview)** on Android for seamless text translation.
 
-# API documentation
+![npm](https://img.shields.io/npm/v/expo-translate-text)
+![Downloads](https://img.shields.io/npm/dm/expo-translate-text)
+![GitHub issues](https://img.shields.io/github/issues/TomAtterton/expo-translate-text)
+![GitHub stars](https://img.shields.io/github/stars/TomAtterton/expo-translate-text)
+![GitHub license](https://img.shields.io/github/license/TomAtterton/expo-translate-text)
 
-- [Documentation for the latest stable release](https://docs.expo.dev/versions/latest/sdk/translate-text/)
-- [Documentation for the main branch](https://docs.expo.dev/versions/unversioned/sdk/translate-text/)
 
-# Installation in managed Expo projects
+## Demo 💫
 
-For [managed](https://docs.expo.dev/archive/managed-vs-bare/) Expo projects, please follow the installation instructions in the [API documentation for the latest stable release](#api-documentation). If you follow the link and there is no documentation available then this library is not yet usable within managed projects &mdash; it is likely to be included in an upcoming Expo SDK release.
+![Demo GIF](./resources/Translate_iOS.gif)
 
-# Installation in bare React Native projects
 
-For bare React Native projects, you must ensure that you have [installed and configured the `expo` package](https://docs.expo.dev/bare/installing-expo-modules/) before continuing.
+## Installation 📦
 
-### Add the package to your npm dependencies
 
+```sh
+expo install expo-translate-text
 ```
-npm install expo-translate-text
+
+## Platform Support 📱
+
+| Platform  | Translation Task | Translation Sheet |
+|-----------|----------------|------------------|
+| iOS   | ✅ Supported (iOS 18+)   | ✅ Supported (iOS 17.4+) |
+| Android   | ✅ Supported   | ❌ Not Supported |
+
+## Usage 🚀
+
+### Basic Text Translation
+
+```tsx
+import { onTranslateTask } from 'expo-translate-text';
+
+const translateText = async () => {
+  try {
+    const result = await onTranslateTask({
+      input: 'Hello, world!',
+      sourceLangCode: 'en',
+      targetLangCode: 'es',
+    });
+    console.log(result.translatedTexts); // "¡Hola, mundo!"
+  } catch (error) {
+    console.error(error);
+  }
+};
 ```
 
-### Configure for Android
+### Translation Sheet (iOS Only)
 
 
+```tsx
+import { onTranslateSheet } from 'expo-translate-text';
+import { Platform } from 'react-native';
 
+const translateSheet = async () => {
+  if (Platform.OS === 'android') {
+    console.warn('Sheet translation is not supported on Android.');
+    return;
+  }
 
-### Configure for iOS
+  try {
+    const translatedText = await onTranslateSheet({
+      input: 'Bonjour tout le monde',
+    });
+    console.log(translatedText);
+  } catch (error) {
+    console.error(error);
+  }
+};
+```
 
-Run `npx pod-install` after installing the npm package.
+## API Reference 📖
 
-# Contributing
+### onTranslateTask
+Translates a given text or batch of text.
 
-Contributions are very welcome! Please refer to guidelines described in the [contributing guide]( https://github.com/expo/expo#contributing).
+**Request:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `input` | `string` \| `string[]` \| `{ [key: string]: string \| string[] }` | Text to be translated. |
+| `sourceLangCode?` | `string` | Source language code (e.g., 'en'). |
+| `targetLangCode` | `string` | Target language code (e.g., 'es'). |
+| `requireCharging?` | `boolean` | Requires device to be charging. |
+| `requiresWifi?` | `boolean` | Requires WiFi for translation. |
+
+**Response:**
+
+Key              | Type                                                  | Description
+--------------- | ----------------------------------------------------- | -------------
+`translatedTexts` | `string` \| `string[]` \| `{ [key: string]: string \| string[] }` | The translated text(s).
+`sourceLanguage` | `string` \| `null`                                   | The detected source language, or `null` if unknown.
+`targetLanguage` | `string`                                             | The requested target language.
+
+---
+
+### onTranslateSheet (iOS 17.4+)
+
+⚠️ **Not supported on Android**
+
+Translates text using the Translation Sheet API.
+
+**Request:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `input` | `string` | The text to be translated. |
+
+**Response:**
+
+Key    | Type     | Description
+------ | ------- | -------------
+`result` | `string` | The translated text.
+
+## Contributing 🙌
+
+See the [contributing guide](CONTRIBUTING.md) to learn how to contribute.
+
+## License 📜
+
+MIT
+
+Enjoy translating with `expo-translate-text`! 🌎
