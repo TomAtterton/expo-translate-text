@@ -1,48 +1,205 @@
 import ExpoModulesCore
+import SwiftUI
+
+#if canImport(Translation)
+    import Translation
+#endif
 
 public class ExpoTranslateTextModule: Module {
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
-  public func definition() -> ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('ExpoTranslateText')` in JavaScript.
-    Name("ExpoTranslateText")
+    private var hostingController: UIHostingController<AnyView>?
 
-    // Sets constant properties on the module. Can take a dictionary or a closure that returns a dictionary.
-    Constants([
-      "PI": Double.pi
-    ])
+    public func definition() -> ModuleDefinition {
+        Name("ExpoTranslateText")
 
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
+        AsyncFunction("translateSheet") {
+            [weak self] (params: [String: Any]) async throws -> [String: Any] in
+            guard let self = self else {
+                throw NSError(
+                    domain: "ExpoIosTranslateModule",
+                    code: 0,
+                    userInfo: [NSLocalizedDescriptionKey: "Module deallocated"]
+                )
+            }
 
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      return "Hello world! 👋"
-    }
+            var textToTranslate: String = ""
+            if let text = params["input"] as? String {
+                textToTranslate = text
+            }
 
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { (value: String) in
-      // Send an event to JavaScript.
-      self.sendEvent("onChange", [
-        "value": value
-      ])
-    }
+            guard !textToTranslate.isEmpty else {
+                throw NSError(
+                    domain: "ExpoIosTranslateModule",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "No text provided for translation"]
+                )
+            }
 
-    // Enables the module to be used as a native view. Definition components that are accepted as part of the
-    // view definition: Prop, Events.
-    View(ExpoTranslateTextView.self) {
-      // Defines a setter for the `url` prop.
-      Prop("url") { (view: ExpoTranslateTextView, url: URL) in
-        if view.webView.url != url {
-          view.webView.load(URLRequest(url: url))
+            let sheetProps = SheetProps()
+            sheetProps.text = textToTranslate
+
+            if #available(iOS 17.4, *) {
+                return try await withCheckedThrowingContinuation { continuation in
+                    DispatchQueue.main.async {
+                        sheetProps.onHide = {
+                            let result: [String: Any] = [
+                                "translatedText": sheetProps.text
+                            ]
+                            continuation.resume(returning: result)
+                            self.dismissTranslationView()
+                        }
+                        sheetProps.isPresented = true
+                        self.presentTranslationSheet(sheetProps)
+                    }
+                }
+            } else {
+                throw NSError(
+                    domain: "ExpoIosTranslateModule",
+                    code: -1,
+                    userInfo: [
+                        NSLocalizedDescriptionKey:
+                            "Translation sheet is only supported on iOS 17.4 or newer"
+                    ]
+                )
+            }
         }
-      }
 
-      Events("onLoad")
+        AsyncFunction("translateTask") {
+            [weak self] (params: [String: Any]) async throws -> [String: Any] in
+            guard let self = self else {
+                throw NSError(
+                    domain: "ExpoIosTranslateModule",
+                    code: 0,
+                    userInfo: [NSLocalizedDescriptionKey: "Module deallocated"]
+                )
+            }
+
+            let (texts, inputType, dictMapping) = parseTexts(from: params)
+            guard !texts.isEmpty else {
+                throw NSError(
+                    domain: "ExpoIosTranslateModule",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "No texts provided for translation"]
+                )
+            }
+
+            let targetLangCode = params["targetLangCode"] as? String ?? "en"
+            let sourceLangCode = params["sourceLangCode"] as? String
+
+            let props = Props()
+            props.texts = texts
+            props.targetLanguage = targetLangCode
+            props.sourceLanguage = sourceLangCode
+
+            if #available(iOS 18.0, *) {
+                await MainActor.run { self.presentTranslationView(props) }
+                return try await withCheckedThrowingContinuation { continuation in
+                    props.onSuccess = { translatedTexts in
+                        let result: [String: Any]
+                        if inputType == .dictionary, let mapping = dictMapping {
+                            var resultDict: [String: Any] = [:]
+                            for (key, value) in mapping {
+                                let indices = value.indices
+                                if value.isArray {
+                                    let arr = indices.map { translatedTexts[$0] }
+                                    resultDict[key] = arr
+                                } else {
+                                    if let index = indices.first {
+                                        resultDict[key] = translatedTexts[index]
+                                    }
+                                }
+                            }
+                            result = [
+                                "translatedTexts": resultDict,
+                                "sourceLanguage": sourceLangCode as Any,
+                                "targetLanguage": targetLangCode,
+                            ]
+                        } else if inputType == .string {
+                            result = [
+                                "translatedTexts": translatedTexts.first ?? "",
+                                "sourceLanguage": sourceLangCode as Any,
+                                "targetLanguage": targetLangCode,
+                            ]
+                        } else {
+                            result = [
+                                "translatedTexts": translatedTexts,
+                                "sourceLanguage": sourceLangCode as Any,
+                                "targetLanguage": targetLangCode,
+                            ]
+                        }
+                        continuation.resume(returning: result)
+                        DispatchQueue.main.async { self.dismissTranslationView() }
+                    }
+
+                    props.onError = { errorMessage in
+                        let friendlyMessage = friendlyErrorMessage(
+                            from: NSError(
+                                domain: "ExpoIosTranslateModule",
+                                code: 2,
+                                userInfo: [NSLocalizedDescriptionKey: errorMessage]
+                            ))
+                        continuation.resume(
+                            throwing: NSError(
+                                domain: "ExpoIosTranslateModule",
+                                code: 2,
+                                userInfo: [NSLocalizedDescriptionKey: friendlyMessage]
+                            ))
+                        DispatchQueue.main.async { self.dismissTranslationView() }
+                    }
+
+                    props.shouldTranslate = true
+                }
+            } else {
+                throw NSError(
+                    domain: "ExpoIosTranslateModule",
+                    code: -1,
+                    userInfo: [
+                        NSLocalizedDescriptionKey:
+                            "Translation is only supported on iOS 18.0 or newer"
+                    ]
+                )
+            }
+        }
     }
-  }
+
+    // MARK: - Private Helpers for Managing SwiftUI Views
+    @MainActor
+    private func presentTranslationView(_ props: Props) {
+        let controller = UIHostingController(rootView: AnyView(IOSTranslateTasks(props: props)))
+        hostingController = controller
+
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+            let rootVC = windowScene.windows.first?.rootViewController
+        {
+            rootVC.addChild(controller)
+            rootVC.view.addSubview(controller.view)
+            controller.view.frame = CGRect(x: 0, y: 0, width: 1, height: 1)
+            controller.view.isHidden = true
+            controller.didMove(toParent: rootVC)
+        }
+    }
+
+    @MainActor
+    private func presentTranslationSheet(_ props: SheetProps) {
+        let controller = UIHostingController(rootView: AnyView(IOSTranslateSheet(props: props)))
+        hostingController = controller
+
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+            let rootVC = windowScene.windows.first?.rootViewController
+        {
+            rootVC.addChild(controller)
+            rootVC.view.addSubview(controller.view)
+            controller.view.frame = CGRect(x: 0, y: 0, width: 1, height: 1)
+            controller.view.isHidden = true
+            controller.didMove(toParent: rootVC)
+        }
+    }
+
+    @MainActor
+    private func dismissTranslationView() {
+        if let controller = hostingController {
+            controller.view.removeFromSuperview()
+            controller.removeFromParent()
+            hostingController = nil
+        }
+    }
 }

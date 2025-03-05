@@ -1,12 +1,17 @@
-import { NativeModule, requireNativeModule } from 'expo';
+import { requireNativeModule } from 'expo-modules-core';
+import { ExpoTranslateTextModule } from './ExpoTranslateText.types';
 
-import { ExpoTranslateTextModuleEvents } from './ExpoTranslateText.types';
+export class TranslationError extends Error {
+  code?: number;
 
-declare class ExpoTranslateTextModule extends NativeModule<ExpoTranslateTextModuleEvents> {
-  PI: number;
-  hello(): string;
-  setValueAsync(value: string): Promise<void>;
+  constructor(message: string, code?: number) {
+    super(message);
+    this.name = 'TranslationError';
+    this.code = code;
+  }
 }
 
-// This call loads the native module object from the JSI.
-export default requireNativeModule<ExpoTranslateTextModule>('ExpoTranslateText');
+const ExpoIosTranslate = requireNativeModule<ExpoTranslateTextModule>('ExpoTranslateText');
+
+export const translateTask = ExpoIosTranslate.translateTask;
+export const translateSheet = ExpoIosTranslate.translateSheet;

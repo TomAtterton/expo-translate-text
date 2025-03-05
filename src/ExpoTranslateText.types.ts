@@ -1,19 +1,33 @@
-import type { StyleProp, ViewStyle } from 'react-native';
+export interface TranslationTaskRequest {
+  input: string[] | { [key: string]: string | string[] } | string;
+  sourceLangCode?: string;
+  targetLangCode?: string;
+  requireCharging?: boolean;
+  requiresWifi?: boolean;
+}
 
-export type OnLoadEventPayload = {
-  url: string;
-};
+export interface TranslationTaskResult {
+  translatedTexts: string | string[] | { [key: string]: string | string[] };
+  sourceLanguage: string | null;
+  targetLanguage: string;
+}
 
-export type ExpoTranslateTextModuleEvents = {
-  onChange: (params: ChangeEventPayload) => void;
-};
+export interface BatchTranslationTaskResult {
+  translatedTexts: string[] | { [key: string]: string | string[] };
+  sourceLanguage: string | null;
+  targetLanguage: string;
+}
 
-export type ChangeEventPayload = {
-  value: string;
-};
+export interface TranslationSheetResult {
+  translatedText: string;
+}
 
-export type ExpoTranslateTextViewProps = {
-  url: string;
-  onLoad: (event: { nativeEvent: OnLoadEventPayload }) => void;
-  style?: StyleProp<ViewStyle>;
-};
+export interface TranslationSheetRequest {
+  input: string;
+}
+
+export interface ExpoTranslateTextModule {
+  translateTask(params: TranslationTaskRequest): Promise<BatchTranslationTaskResult>;
+
+  translateSheet(params: TranslationSheetRequest): Promise<TranslationSheetResult>;
+}
