@@ -11,32 +11,24 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import org.json.JSONArray
+import org.json.JSONObject
+import org.json.JSONTokener
 import java.util.concurrent.atomic.AtomicInteger
 
 class ExpoTranslateTextModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("ExpoTranslateText")
 
-    AsyncFunction("translateTask") { params: Map<String, Any>, promise: Promise ->
-      translateTask(params, promise)
+    AsyncFunction("translateTask") { inputJson: String, targetLangCode: String, sourceLangCode: String?, requiresWifi: Boolean, requireCharging: Boolean, promise: Promise ->
+      translateTask(inputJson, targetLangCode, sourceLangCode, requiresWifi, requireCharging, promise)
     }
   }
 
-  private fun translateTask(params: Map<String, Any>, promise: Promise) {
+  private fun translateTask(inputJson: String, targetLangCode: String, sourceLangCode: String?, requiresWifi: Boolean, requireCharging: Boolean, promise: Promise) {
     try {
-      val textsInput = params["input"] ?: throw CodedException(
-        code = "INVALID_PARAMETER",
-        message = "No texts provided",
-        cause = null
-      )
+      val textsInput = JSONTokener(inputJson).nextValue()
 
-      // 2) Validate the target language
-      val targetLangCode = params["targetLangCode"] as? String
-        ?: throw CodedException(
-          code = "INVALID_PARAMETER",
-          message = "Target language code is missing",
-          cause = null
-        )
       val targetLanguage = TranslateLanguage.fromLanguageTag(targetLangCode)
         ?: throw CodedException(
           code = "INVALID_PARAMETER",
@@ -44,8 +36,6 @@ class ExpoTranslateTextModule : Module() {
           cause = null
         )
 
-      // 3) Optional source language (could be "auto")
-      val sourceLangCode = params["sourceLangCode"] as? String
       val fixedSourceLanguage: String? = if (sourceLangCode != null && sourceLangCode != "auto") {
         TranslateLanguage.fromLanguageTag(sourceLangCode)
           ?: throw CodedException(
@@ -54,10 +44,6 @@ class ExpoTranslateTextModule : Module() {
             cause = null
           )
       } else null
-
-      // 4) Configure download conditions
-      val requiresWifi = params["requiresWifi"] as? Boolean ?: false
-      val requireCharging = params["requireCharging"] as? Boolean ?: false
 
       val conditionsBuilder = DownloadConditions.Builder()
       if (requiresWifi) {
@@ -90,8 +76,8 @@ class ExpoTranslateTextModule : Module() {
       // 10) Figure out the total steps for concurrency
       val totalStringCount = textsMap.values.sumOf { it.size }
       val pendingCountValue = if (fixedSourceLanguage != null) {
-        // 1 (download) + N (translations)
-        totalStringCount + 1
+        // 1 (initial download) + N (download in translateText) + N (translations) = 1 + 2N
+        totalStringCount * 2 + 1
       } else {
         // For each string: 1 detection + 1 download + 1 translation = 3
         totalStringCount * 3
@@ -311,25 +297,35 @@ class ExpoTranslateTextModule : Module() {
   private fun extractTexts(input: Any): Map<String, List<String>> {
     return when (input) {
       is String -> {
-        // Single string => one map entry "0" => listOf(thatString)
         mapOf("0" to listOf(input))
       }
-      is List<*> -> {
-        // If top-level is an array, store everything under "0"
-        val stringList = input.filterIsInstance<String>()
+      is JSONArray -> {
+        val stringList = mutableListOf<String>()
+        for (i in 0 until input.length()) {
+          stringList.add(input.getString(i))
+        }
         mapOf("0" to stringList)
       }
-      is Map<*, *> -> {
-        // If top-level is an object, each value can be string or string[]
-        input.entries.associate { (k, v) ->
-          val key = k.toString()
-          val listOfStrings: List<String> = when (v) {
-            is String -> listOf(v)
-            is List<*> -> v.filterIsInstance<String>()
+      is JSONObject -> {
+        val result = mutableMapOf<String, List<String>>()
+        val keys = input.keys()
+        while (keys.hasNext()) {
+          val key = keys.next()
+          val value = input.get(key)
+          val listOfStrings: List<String> = when (value) {
+            is String -> listOf(value)
+            is JSONArray -> {
+              val arr = mutableListOf<String>()
+              for (i in 0 until value.length()) {
+                arr.add(value.getString(i))
+              }
+              arr
+            }
             else -> emptyList()
           }
-          key to listOfStrings
+          result[key] = listOfStrings
         }
+        result
       }
       else -> emptyMap()
     }
@@ -346,16 +342,18 @@ class ExpoTranslateTextModule : Module() {
       is String -> {
         ""
       }
-      is List<*> -> {
+      is JSONArray -> {
         mutableListOf<String>()
       }
-      is Map<*, *> -> {
+      is JSONObject -> {
         val outputMap = mutableMapOf<String, Any>()
-        for ((k, v) in input) {
-          val key = k.toString()
-          when (v) {
+        val keys = input.keys()
+        while (keys.hasNext()) {
+          val key = keys.next()
+          val value = input.get(key)
+          when (value) {
             is String -> outputMap[key] = ""
-            is List<*> -> outputMap[key] = mutableListOf<String>()
+            is JSONArray -> outputMap[key] = mutableListOf<String>()
             else -> outputMap[key] = ""
           }
         }
