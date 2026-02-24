@@ -30,15 +30,16 @@
   "homepage": "https://github.com/bluesky-social/expo-translate-text#readme",
   "dependencies": {},
   "devDependencies": {
-    "@types/react": "~18.3.12",
-    "expo-module-scripts": "^4.0.3",
+    "@types/react": "~19.0.10",
+    "expo": "^53.0.27",
+    "expo-module-scripts": "5.0.8",
     "prettier": "^3.5.3",
-    "expo": "~52.0.0",
-    "react-native": "0.76.0"
+    "react-native": "0.79.6"
   },
   "peerDependencies": {
     "expo": "*",
     "react": "*",
     "react-native": "*"
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
