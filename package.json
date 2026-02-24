@@ -1,7 +1,7 @@
 {
-  "name": "expo-translate-text",
+  "name": "@bsky.app/expo-translate-text",
   "version": "0.2.0",
-  "description": "My new module",
+  "description": "Expo module for on-device translation.",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "scripts": {
@@ -21,13 +21,13 @@
     "expo-translate-text",
     "ExpoTranslateText"
   ],
-  "repository": "https://github.com/TomAtterton/expo-translate-text",
+  "repository": "https://github.com/bluesky-social/expo-translate-text",
   "bugs": {
-    "url": "https://github.com/TomAtterton/expo-translate-text/issues"
+    "url": "https://github.com/bluesky-social/expo-translate-text/issues"
   },
   "author": "Tom Atterton <tpatterton@gmail.com> (https://github.com/TomAtterton)",
   "license": "MIT",
-  "homepage": "https://github.com/TomAtterton/expo-translate-text#readme",
+  "homepage": "https://github.com/bluesky-social/expo-translate-text#readme",
   "dependencies": {},
   "devDependencies": {
     "@types/react": "~18.3.12",
