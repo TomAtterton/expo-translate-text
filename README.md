@@ -1,7 +1,7 @@
 # expo-translate-text 🌍
 
 > [!NOTE]
-> This is a fork of [expo-translate-text](https://github.com/TomAtterton/expo-translate-text)
+> This is a fork of [TomAtterton/expo-translate-text](https://github.com/TomAtterton/expo-translate-text)
 
 `expo-translate-text` is a React Native module for translating text using platform-specific translation APIs. It leverages Apple's **[iOS Translation API](https://developer.apple.com/documentation/translation)** (with **Translation Sheet** available in **iOS 17.4+**) and **[Google ML Kit](https://developers.google.com/ml-kit/language/translation/overview)** on Android for seamless text translation.
 
