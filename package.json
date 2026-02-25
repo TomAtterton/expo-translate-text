@@ -1,6 +1,6 @@
 {
   "name": "@bsky.app/expo-translate-text",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Expo module for on-device translation.",
   "main": "build/index.js",
   "types": "build/index.d.ts",
@@ -30,11 +30,11 @@
   "homepage": "https://github.com/bluesky-social/expo-translate-text#readme",
   "dependencies": {},
   "devDependencies": {
-    "@types/react": "~19.0.10",
-    "expo": "^53.0.27",
+    "@types/react": "~19.1.10",
+    "expo": "^54.0.33",
     "expo-module-scripts": "5.0.8",
     "prettier": "^3.5.3",
-    "react-native": "0.79.6"
+    "react-native": "0.81.5"
   },
   "peerDependencies": {
     "expo": "*",
