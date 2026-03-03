@@ -26,6 +26,16 @@ export interface TranslationSheetRequest {
   input: string;
 }
 
+export type TranslationErrorCode =
+  | 'INTERNAL_ERROR'
+  | 'NO_TEXT_PROVIDED'
+  | 'UNSUPPORTED_OS_VERSION'
+  | 'INVALID_LANGUAGE'
+  | 'TRANSLATION_FAILED'
+  | 'MODEL_DOWNLOAD_FAILED'
+  | 'LANGUAGE_DETECTION_FAILED'
+  | 'UNKNOWN_ERROR';
+
 export interface ExpoTranslateTextModule {
   translateTask(params: TranslationTaskRequest): Promise<BatchTranslationTaskResult>;
 

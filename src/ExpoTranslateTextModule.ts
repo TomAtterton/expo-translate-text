@@ -1,11 +1,11 @@
 import { requireNativeModule } from 'expo-modules-core';
-import { ExpoTranslateTextModule, TranslationTaskRequest } from './ExpoTranslateText.types';
+import { ExpoTranslateTextModule, TranslationErrorCode, TranslationTaskRequest } from './ExpoTranslateText.types';
 import { Platform } from 'react-native';
 
 export class TranslationError extends Error {
-  code?: number;
+  code: TranslationErrorCode;
 
-  constructor(message: string, code?: number) {
+  constructor(message: string, code: TranslationErrorCode = 'UNKNOWN_ERROR') {
     super(message);
     this.name = 'TranslationError';
     this.code = code;
