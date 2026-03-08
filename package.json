@@ -31,7 +31,8 @@
   "files": [
     "build",
     "ios",
-    "android",
+    "android/src",
+    "android/build.gradle",
     "src",
     "expo-module.config.json",
     "README.md"
