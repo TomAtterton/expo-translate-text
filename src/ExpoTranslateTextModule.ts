@@ -2,9 +2,9 @@ import { requireNativeModule } from 'expo-modules-core';
 import { ExpoTranslateTextModule } from './ExpoTranslateText.types';
 
 export class TranslationError extends Error {
-  code?: number;
+  code?: string | number;
 
-  constructor(message: string, code?: number) {
+  constructor(message: string, code?: string | number) {
     super(message);
     this.name = 'TranslationError';
     this.code = code;

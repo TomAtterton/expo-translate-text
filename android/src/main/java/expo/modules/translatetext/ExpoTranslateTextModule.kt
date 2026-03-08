@@ -11,6 +11,7 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 class ExpoTranslateTextModule : Module() {
@@ -22,6 +23,17 @@ class ExpoTranslateTextModule : Module() {
     }
   }
 
+  /**
+   * Represents a single text to translate, with metadata to reconstruct the output.
+   */
+  private data class TranslationItem(
+    val flatIndex: Int,
+    val key: String,
+    val text: String,
+    val indexInKey: Int,
+    val isArrayValue: Boolean
+  )
+
   private fun translateTask(params: Map<String, Any>, promise: Promise) {
     try {
       val textsInput = params["input"] ?: throw CodedException(
@@ -30,13 +42,8 @@ class ExpoTranslateTextModule : Module() {
         cause = null
       )
 
-      // 2) Validate the target language
-      val targetLangCode = params["targetLangCode"] as? String
-        ?: throw CodedException(
-          code = "INVALID_PARAMETER",
-          message = "Target language code is missing",
-          cause = null
-        )
+      // Validate or default the target language
+      val targetLangCode = params["targetLangCode"] as? String ?: "en"
       val targetLanguage = TranslateLanguage.fromLanguageTag(targetLangCode)
         ?: throw CodedException(
           code = "INVALID_PARAMETER",
@@ -44,7 +51,7 @@ class ExpoTranslateTextModule : Module() {
           cause = null
         )
 
-      // 3) Optional source language (could be "auto")
+      // Optional source language (could be "auto")
       val sourceLangCode = params["sourceLangCode"] as? String
       val fixedSourceLanguage: String? = if (sourceLangCode != null && sourceLangCode != "auto") {
         TranslateLanguage.fromLanguageTag(sourceLangCode)
@@ -55,7 +62,7 @@ class ExpoTranslateTextModule : Module() {
           )
       } else null
 
-      // 4) Configure download conditions
+      // Configure download conditions
       val requiresWifi = params["requiresWifi"] as? Boolean ?: false
       val requireCharging = params["requireCharging"] as? Boolean ?: false
 
@@ -68,87 +75,94 @@ class ExpoTranslateTextModule : Module() {
       }
       val conditions = conditionsBuilder.build()
 
-      // 5) Convert user input into a map of "key" -> List<String>
-      val textsMap = extractTexts(textsInput)
+      // Extract all texts into a flat list with positional metadata
+      val items = extractItems(textsInput)
+      if (items.isEmpty()) {
+        throw CodedException(
+          code = "INVALID_PARAMETER",
+          message = "No texts provided",
+          cause = null
+        )
+      }
 
-      // 6) Build an initial output structure that matches the shape of 'textsInput'
-      var translatedTexts = buildInitialOutputStructure(textsInput)
+      // Flat results array — each item writes to its own index
+      val results = Array(items.size) { "" }
 
-      // 7) Track the detected languages for each key
-      val detectedLanguages = mutableMapOf<String, String>()
+      // Track detected source languages per item
+      val detectedLanguages = mutableMapOf<Int, String>()
 
-      // 8) Create a language identifier (for auto detection)
+      // Guard against multiple promise settlements
+      val settled = AtomicBoolean(false)
+
+      // Language identifier for auto detection
       val languageIdentifier = LanguageIdentification.getClient(
         LanguageIdentificationOptions.Builder()
           .setConfidenceThreshold(0.5f)
           .build()
       )
 
-      // 9) Dictionary of translators keyed by "sourceLang-targetLang"
+      // Reusable translators keyed by "sourceLang-targetLang"
       val translators = mutableMapOf<String, com.google.mlkit.nl.translate.Translator>()
 
-      // 10) Figure out the total steps for concurrency
-      val totalStringCount = textsMap.values.sumOf { it.size }
-      val pendingCountValue = if (fixedSourceLanguage != null) {
-        // 1 (download) + N (translations)
-        totalStringCount + 1
+      // Pending step count
+      val totalSteps = if (fixedSourceLanguage != null) {
+        // 1 model download + N translations
+        items.size + 1
       } else {
-        // For each string: 1 detection + 1 download + 1 translation = 3
-        totalStringCount * 3
+        // Per item: 1 detect + 1 download + 1 translate = 3
+        items.size * 3
       }
-      val pendingCount = AtomicInteger(pendingCountValue)
+      val pendingCount = AtomicInteger(totalSteps)
 
-      // 11) Completion handler. When pendingCount hits 0 => return result
+      // Cleanup helper
+      val cleanup: () -> Unit = {
+        translators.values.forEach { it.close() }
+        languageIdentifier.close()
+      }
+
+      // Safe reject — only settles the promise once
+      val safeReject: (String, String, Throwable?) -> Unit = { code, message, cause ->
+        if (settled.compareAndSet(false, true)) {
+          cleanup()
+          promise.reject(CodedException(code = code, message = message, cause = cause))
+        }
+      }
+
+      // Completion handler — decrements pending count, resolves when 0
       val completionHandler: () -> Unit = {
         val remaining = pendingCount.decrementAndGet()
-        if (remaining == 0) {
-          // All done => close resources, resolve
-          translators.values.forEach { it.close() }
-          languageIdentifier.close()
+        if (remaining == 0 && settled.compareAndSet(false, true)) {
+          cleanup()
 
-          // Determine a single "sourceLanguage" string
-          val finalSourceLanguage: String = if (fixedSourceLanguage != null) {
-            // We already know which source was used
+          val finalSourceLanguage: String? = if (fixedSourceLanguage != null) {
             fixedSourceLanguage
           } else {
-            // Auto detection => see if all detected languages are the same
             val uniqueLangs = detectedLanguages.values.toSet()
-            if (uniqueLangs.size == 1) {
-              uniqueLangs.first()
-            } else {
-              "multiple" // or pick the most frequent, etc.
+            when {
+              uniqueLangs.size == 1 -> uniqueLangs.first()
+              uniqueLangs.isNotEmpty() -> "multiple"
+              else -> null
             }
           }
+
+          // Reconstruct output matching the original input shape
+          val translatedTexts = reconstructOutput(textsInput, items, results)
 
           promise.resolve(
             mapOf(
               "translatedTexts" to translatedTexts,
-              "detectedLanguages" to detectedLanguages,
               "targetLanguage" to targetLangCode,
-              // Return a single "sourceLanguage" string
               "sourceLanguage" to finalSourceLanguage
-            )
-          )
-
-        } else if (remaining < 0) {
-          // Should never go negative => indicates concurrency error
-          translators.values.forEach { it.close() }
-          languageIdentifier.close()
-          promise.reject(
-            CodedException(
-              code = "INTERNAL_ERROR",
-              message = "Task count went negative: $remaining",
-              cause = null
             )
           )
         }
       }
 
-      // 12) Translate function for a single string
-      val translateText: (key: String, text: String, sourceLang: String) -> Unit =
-        { key, text, sourceLang ->
-          val translatorKey = "$sourceLang-$targetLanguage"
-          val translator = translators.getOrPut(translatorKey) {
+      // Translate a single item
+      val translateItem: (TranslationItem, String) -> Unit = { item, sourceLang ->
+        val translatorKey = "$sourceLang-$targetLanguage"
+        val translator = synchronized(translators) {
+          translators.getOrPut(translatorKey) {
             Translation.getClient(
               TranslatorOptions.Builder()
                 .setSourceLanguage(sourceLang)
@@ -156,113 +170,50 @@ class ExpoTranslateTextModule : Module() {
                 .build()
             )
           }
-
-          translator.downloadModelIfNeeded(conditions)
-            .addOnSuccessListener {
-              // Download done => 1 step
-              completionHandler()
-
-              translator.translate(text)
-                .addOnSuccessListener { translatedText ->
-                  synchronized(translatedTexts) {
-                    // Insert into the correct shape
-                    when (translatedTexts) {
-                      is String -> {
-                        // If top-level was originally just one string
-                        translatedTexts = translatedText
-                      }
-                      is MutableList<*> -> {
-                        // If top-level was an array
-                        (translatedTexts as MutableList<String>).add(translatedText)
-                      }
-                      is MutableMap<*, *> -> {
-                        // If top-level was an object
-                        val existingValue = (translatedTexts as MutableMap<String, Any>)[key]
-                        when (existingValue) {
-                          is String -> {
-                            // This key was originally a single string
-                            if (existingValue.isEmpty()) {
-                              (translatedTexts as MutableMap<String, Any>)[key] = translatedText
-                            } else {
-                              // Overwrite or something else
-                              (translatedTexts as MutableMap<String, Any>)[key] = translatedText
-                            }
-                          }
-                          is MutableList<*> -> {
-                            // This key was originally an array
-                            (existingValue as MutableList<String>).add(translatedText)
-                          }
-                        }
-                      }
-                    }
-                    // Record the source language for this key
-                    detectedLanguages[key] = sourceLang
-                  }
-                  // Translation done => 1 step
-                  completionHandler()
-                }
-                .addOnFailureListener { e ->
-                  translators.values.forEach { it.close() }
-                  languageIdentifier.close()
-                  promise.reject(
-                    CodedException(
-                      code = "TEXT_TRANSLATE_FAILED",
-                      message = e.message ?: "Translation failed for text: $text",
-                      cause = e
-                    )
-                  )
-                }
-            }
-            .addOnFailureListener { e ->
-              translators.values.forEach { it.close() }
-              languageIdentifier.close()
-              promise.reject(
-                CodedException(
-                  code = "MODEL_DOWNLOAD_FAILED",
-                  message = e.message ?: "Model download failed for $sourceLang-$targetLanguage",
-                  cause = e
-                )
-              )
-            }
         }
 
-      // 13) Function to process all keys/strings in 'textsMap'
-      val processTexts: () -> Unit = {
-        if (textsMap.isEmpty()) {
-          completionHandler()
-        } else {
-          for ((key, listOfStrings) in textsMap) {
-            for (singleString in listOfStrings) {
-              if (fixedSourceLanguage != null) {
-                // If we already know the source => just translate
-                translateText(key, singleString, fixedSourceLanguage)
-              } else {
-                // Otherwise => auto detect first => 1 step
-                languageIdentifier.identifyLanguage(singleString)
-                  .addOnSuccessListener { langCode ->
-                    completionHandler() // language ID done
-                    val detectedLangCode = if (langCode == "und") "en" else langCode
-                    val sourceLang = TranslateLanguage.fromLanguageTag(detectedLangCode) ?: "en"
-                    translateText(key, singleString, sourceLang)
-                  }
-                  .addOnFailureListener { e ->
-                    translators.values.forEach { it.close() }
-                    languageIdentifier.close()
-                    promise.reject(
-                      CodedException(
-                        code = "LANGUAGE_ID_FAILED",
-                        message = e.message ?: "Language identification failed for text: $singleString",
-                        cause = e
-                      )
-                    )
-                  }
+        translator.downloadModelIfNeeded(conditions)
+          .addOnSuccessListener {
+            completionHandler() // download step done
+
+            translator.translate(item.text)
+              .addOnSuccessListener { translatedText ->
+                results[item.flatIndex] = translatedText
+                synchronized(detectedLanguages) {
+                  detectedLanguages[item.flatIndex] = sourceLang
+                }
+                completionHandler() // translate step done
               }
-            }
+              .addOnFailureListener { e ->
+                safeReject("TEXT_TRANSLATE_FAILED", e.message ?: "Translation failed for: ${item.text}", e)
+              }
+          }
+          .addOnFailureListener { e ->
+            safeReject("MODEL_DOWNLOAD_FAILED", e.message ?: "Model download failed for $sourceLang-$targetLanguage", e)
+          }
+      }
+
+      // Process all items
+      val processItems: () -> Unit = {
+        for (item in items) {
+          if (fixedSourceLanguage != null) {
+            translateItem(item, fixedSourceLanguage)
+          } else {
+            languageIdentifier.identifyLanguage(item.text)
+              .addOnSuccessListener { langCode ->
+                completionHandler() // detect step done
+                val detectedLangCode = if (langCode == "und") "en" else langCode
+                val sourceLang = TranslateLanguage.fromLanguageTag(detectedLangCode) ?: "en"
+                translateItem(item, sourceLang)
+              }
+              .addOnFailureListener { e ->
+                safeReject("LANGUAGE_ID_FAILED", e.message ?: "Language identification failed for: ${item.text}", e)
+              }
           }
         }
       }
 
-      // 14) If fixed source => pre-download once. Otherwise, start processTexts immediately.
+      // If fixed source, pre-download the model once, then process
       if (fixedSourceLanguage != null) {
         val translator = Translation.getClient(
           TranslatorOptions.Builder()
@@ -270,25 +221,19 @@ class ExpoTranslateTextModule : Module() {
             .setTargetLanguage(targetLanguage)
             .build()
         )
-        translators["fixed"] = translator
+        synchronized(translators) {
+          translators["fixed"] = translator
+        }
         translator.downloadModelIfNeeded(conditions)
           .addOnSuccessListener {
             completionHandler() // single model download done
-            processTexts()
+            processItems()
           }
           .addOnFailureListener { e ->
-            translators.values.forEach { it.close() }
-            languageIdentifier.close()
-            promise.reject(
-              CodedException(
-                code = "MODEL_DOWNLOAD_FAILED",
-                message = e.message ?: "Model download failed",
-                cause = e
-              )
-            )
+            safeReject("MODEL_DOWNLOAD_FAILED", e.message ?: "Model download failed", e)
           }
       } else {
-        processTexts()
+        processItems()
       }
 
     } catch (e: CodedException) {
@@ -305,65 +250,64 @@ class ExpoTranslateTextModule : Module() {
   }
 
   /**
-   * Convert user input (string | string[] | { [key]: string|string[] }) into a map
-   * of "key" -> list of strings. This unifies everything for easy iteration.
+   * Flatten input into a list of TranslationItems with positional metadata.
    */
-  private fun extractTexts(input: Any): Map<String, List<String>> {
+  private fun extractItems(input: Any): List<TranslationItem> {
+    var flatIndex = 0
     return when (input) {
       is String -> {
-        // Single string => one map entry "0" => listOf(thatString)
-        mapOf("0" to listOf(input))
+        listOf(TranslationItem(flatIndex = 0, key = "0", text = input, indexInKey = 0, isArrayValue = false))
       }
       is List<*> -> {
-        // If top-level is an array, store everything under "0"
-        val stringList = input.filterIsInstance<String>()
-        mapOf("0" to stringList)
-      }
-      is Map<*, *> -> {
-        // If top-level is an object, each value can be string or string[]
-        input.entries.associate { (k, v) ->
-          val key = k.toString()
-          val listOfStrings: List<String> = when (v) {
-            is String -> listOf(v)
-            is List<*> -> v.filterIsInstance<String>()
-            else -> emptyList()
-          }
-          key to listOfStrings
+        input.filterIsInstance<String>().mapIndexed { index, text ->
+          TranslationItem(flatIndex = flatIndex++, key = "0", text = text, indexInKey = index, isArrayValue = true)
         }
       }
-      else -> emptyMap()
+      is Map<*, *> -> {
+        val items = mutableListOf<TranslationItem>()
+        for ((k, v) in input) {
+          val key = k.toString()
+          when (v) {
+            is String -> {
+              items.add(TranslationItem(flatIndex = flatIndex++, key = key, text = v, indexInKey = 0, isArrayValue = false))
+            }
+            is List<*> -> {
+              v.filterIsInstance<String>().forEachIndexed { index, text ->
+                items.add(TranslationItem(flatIndex = flatIndex++, key = key, text = text, indexInKey = index, isArrayValue = true))
+              }
+            }
+          }
+        }
+        items
+      }
+      else -> emptyList()
     }
   }
 
   /**
-   * Build a container that has the same top-level shape as 'input'.
-   *  - Single string => "" (an empty string)
-   *  - Array => mutableListOf<String>()
-   *  - Object => map of key-> ("" or mutableListOf<String>), depending on original type
+   * Reconstruct the output to match the original input shape using the flat results array.
    */
-  private fun buildInitialOutputStructure(input: Any): Any {
+  private fun reconstructOutput(input: Any, items: List<TranslationItem>, results: Array<String>): Any {
     return when (input) {
-      is String -> {
-        ""
-      }
-      is List<*> -> {
-        mutableListOf<String>()
-      }
+      is String -> results[0]
+      is List<*> -> results.toList()
       is Map<*, *> -> {
         val outputMap = mutableMapOf<String, Any>()
-        for ((k, v) in input) {
-          val key = k.toString()
-          when (v) {
-            is String -> outputMap[key] = ""
-            is List<*> -> outputMap[key] = mutableListOf<String>()
-            else -> outputMap[key] = ""
+        // Group items by key and reconstruct
+        for (item in items) {
+          if (item.isArrayValue) {
+            val list = outputMap.getOrPut(item.key) { mutableListOf<String>() }
+            if (list is MutableList<*>) {
+              @Suppress("UNCHECKED_CAST")
+              (list as MutableList<String>).add(results[item.flatIndex])
+            }
+          } else {
+            outputMap[item.key] = results[item.flatIndex]
           }
         }
         outputMap
       }
-      else -> {
-        ""
-      }
+      else -> results[0]
     }
   }
 }

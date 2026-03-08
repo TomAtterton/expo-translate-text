@@ -1,7 +1,7 @@
 apply plugin: 'com.android.library'
 
 group = 'expo.modules.translatetext'
-version = '0.1.0'
+version = '0.2.0'
 
 def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
 apply from: expoModulesCorePlugin
@@ -23,10 +23,10 @@ if (useManagedAndroidSdkVersions) {
     }
   }
   project.android {
-    compileSdkVersion safeExtGet("compileSdkVersion", 34)
+    compileSdkVersion safeExtGet("compileSdkVersion", 35)
     defaultConfig {
       minSdkVersion safeExtGet("minSdkVersion", 21)
-      targetSdkVersion safeExtGet("targetSdkVersion", 34)
+      targetSdkVersion safeExtGet("targetSdkVersion", 35)
     }
   }
 }
@@ -35,13 +35,13 @@ android {
   namespace "expo.modules.translatetext"
   defaultConfig {
     versionCode 1
-    versionName "0.1.0"
+    versionName "0.2.0"
   }
   lintOptions {
     abortOnError false
   }
 }
 dependencies {
-    implementation 'com.google.mlkit:translate:17.0.2'
-    implementation 'com.google.mlkit:language-id:17.0.0'
+    implementation 'com.google.mlkit:translate:17.0.3'
+    implementation 'com.google.mlkit:language-id:17.0.6'
 }

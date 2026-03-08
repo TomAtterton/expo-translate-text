@@ -83,17 +83,17 @@ Translates a given text or batch of text.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `input` | `string` \| `string[]` \| `{ [key: string]: string \| string[] }` | Text to be translated. |
-| `sourceLangCode?` | `string` | Source language code (e.g., 'en'). |
-| `targetLangCode` | `string` | Target language code (e.g., 'es'). |
-| `requireCharging?` | `boolean` | Requires device to be charging. |
-| `requiresWifi?` | `boolean` | Requires WiFi for translation. |
+| `sourceLangCode?` | `string` | Source language code (e.g., 'en'). If omitted, the source language is auto-detected. |
+| `targetLangCode?` | `string` | Target language code (e.g., 'es'). Defaults to `'en'`. |
+| `requireCharging?` | `boolean` | Requires device to be charging (Android only). |
+| `requiresWifi?` | `boolean` | Requires WiFi for translation (Android only). |
 
 **Response:**
 
 Key              | Type                                                  | Description
 --------------- | ----------------------------------------------------- | -------------
 `translatedTexts` | `string` \| `string[]` \| `{ [key: string]: string \| string[] }` | The translated text(s).
-`sourceLanguage` | `string` \| `null`                                   | The detected source language, or `null` if unknown.
+`sourceLanguage` | `string` \| `null`                                   | The detected or provided source language, or `null` if detection failed.
 `targetLanguage` | `string`                                             | The requested target language.
 
 ---
@@ -110,11 +110,26 @@ Translates text using the Translation Sheet API.
 |-----------|------|-------------|
 | `input` | `string` | The text to be translated. |
 
-**Response:**
+**Response:** `string` — The translated text.
 
-Key    | Type     | Description
------- | ------- | -------------
-`result` | `string` | The translated text.
+---
+
+### Error Handling
+
+Both functions throw a `TranslationError` on failure:
+
+```tsx
+import { TranslationError } from 'expo-translate-text';
+
+try {
+  const result = await onTranslateTask({ input: 'Hello', targetLangCode: 'es' });
+} catch (error) {
+  if (error instanceof TranslationError) {
+    console.error(error.message); // Human-readable error message
+    console.error(error.code); // Error code (e.g., 'INVALID_PARAMETER', 'MODEL_DOWNLOAD_FAILED')
+  }
+}
+```
 
 ## Contributing 🙌
 

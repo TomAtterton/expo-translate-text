@@ -1,7 +1,7 @@
 {
   "name": "expo-translate-text",
-  "version": "0.1.0",
-  "description": "My new module",
+  "version": "0.2.0",
+  "description": "Translate text using native platform APIs (Apple Translation / Google ML Kit)",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "scripts": {
@@ -28,6 +28,14 @@
   "author": "Tom Atterton <tpatterton@gmail.com> (https://github.com/TomAtterton)",
   "license": "MIT",
   "homepage": "https://github.com/TomAtterton/expo-translate-text#readme",
+  "files": [
+    "build",
+    "ios",
+    "android",
+    "src",
+    "expo-module.config.json",
+    "README.md"
+  ],
   "dependencies": {},
   "devDependencies": {
     "@types/react": "~18.3.12",
@@ -37,8 +45,8 @@
     "react-native": "0.76.0"
   },
   "peerDependencies": {
-    "expo": "*",
-    "react": "*",
-    "react-native": "*"
+    "expo": ">=51.0.0",
+    "react": ">=18.0.0",
+    "react-native": ">=0.74.0"
   }
 }

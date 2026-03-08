@@ -34,12 +34,15 @@ public class ExpoTranslateTextModule: Module {
                 )
             }
 
-            let sheetProps = SheetProps()
-            sheetProps.text = textToTranslate
+            let sheetProps = await MainActor.run {
+                let props = SheetProps()
+                props.text = textToTranslate
+                return props
+            }
 
             if #available(iOS 17.4, *) {
                 return try await withCheckedThrowingContinuation { continuation in
-                    DispatchQueue.main.async {
+                    Task { @MainActor in
                         sheetProps.onHide = {
                             let result: [String: Any] = [
                                 "translatedText": sheetProps.text
@@ -85,68 +88,74 @@ public class ExpoTranslateTextModule: Module {
             let targetLangCode = params["targetLangCode"] as? String ?? "en"
             let sourceLangCode = params["sourceLangCode"] as? String
 
-            let props = Props()
-            props.texts = texts
-            props.targetLanguage = targetLangCode
-            props.sourceLanguage = sourceLangCode
+            let props = await MainActor.run {
+                let p = Props()
+                p.texts = texts
+                p.targetLanguage = targetLangCode
+                p.sourceLanguage = sourceLangCode
+                return p
+            }
 
             if #available(iOS 18.0, *) {
                 await MainActor.run { self.presentTranslationView(props) }
                 return try await withCheckedThrowingContinuation { continuation in
-                    props.onSuccess = { translatedTexts in
-                        let result: [String: Any]
-                        if inputType == .dictionary, let mapping = dictMapping {
-                            var resultDict: [String: Any] = [:]
-                            for (key, value) in mapping {
-                                let indices = value.indices
-                                if value.isArray {
-                                    let arr = indices.map { translatedTexts[$0] }
-                                    resultDict[key] = arr
-                                } else {
-                                    if let index = indices.first {
-                                        resultDict[key] = translatedTexts[index]
+                    Task { @MainActor in
+                        props.onSuccess = { translatedTexts, detectedSourceLanguage in
+                            let resolvedSourceLanguage = sourceLangCode ?? detectedSourceLanguage
+                            let result: [String: Any]
+                            if inputType == .dictionary, let mapping = dictMapping {
+                                var resultDict: [String: Any] = [:]
+                                for (key, value) in mapping {
+                                    let indices = value.indices
+                                    if value.isArray {
+                                        let arr = indices.map { translatedTexts[$0] }
+                                        resultDict[key] = arr
+                                    } else {
+                                        if let index = indices.first {
+                                            resultDict[key] = translatedTexts[index]
+                                        }
                                     }
                                 }
+                                result = [
+                                    "translatedTexts": resultDict,
+                                    "sourceLanguage": resolvedSourceLanguage as Any,
+                                    "targetLanguage": targetLangCode,
+                                ]
+                            } else if inputType == .string {
+                                result = [
+                                    "translatedTexts": translatedTexts.first ?? "",
+                                    "sourceLanguage": resolvedSourceLanguage as Any,
+                                    "targetLanguage": targetLangCode,
+                                ]
+                            } else {
+                                result = [
+                                    "translatedTexts": translatedTexts,
+                                    "sourceLanguage": resolvedSourceLanguage as Any,
+                                    "targetLanguage": targetLangCode,
+                                ]
                             }
-                            result = [
-                                "translatedTexts": resultDict,
-                                "sourceLanguage": sourceLangCode as Any,
-                                "targetLanguage": targetLangCode,
-                            ]
-                        } else if inputType == .string {
-                            result = [
-                                "translatedTexts": translatedTexts.first ?? "",
-                                "sourceLanguage": sourceLangCode as Any,
-                                "targetLanguage": targetLangCode,
-                            ]
-                        } else {
-                            result = [
-                                "translatedTexts": translatedTexts,
-                                "sourceLanguage": sourceLangCode as Any,
-                                "targetLanguage": targetLangCode,
-                            ]
+                            continuation.resume(returning: result)
+                            self.dismissTranslationView()
                         }
-                        continuation.resume(returning: result)
-                        DispatchQueue.main.async { self.dismissTranslationView() }
-                    }
 
-                    props.onError = { errorMessage in
-                        let friendlyMessage = friendlyErrorMessage(
-                            from: NSError(
-                                domain: "ExpoIosTranslateModule",
-                                code: 2,
-                                userInfo: [NSLocalizedDescriptionKey: errorMessage]
-                            ))
-                        continuation.resume(
-                            throwing: NSError(
-                                domain: "ExpoIosTranslateModule",
-                                code: 2,
-                                userInfo: [NSLocalizedDescriptionKey: friendlyMessage]
-                            ))
-                        DispatchQueue.main.async { self.dismissTranslationView() }
-                    }
+                        props.onError = { errorMessage in
+                            let friendlyMessage = friendlyErrorMessage(
+                                from: NSError(
+                                    domain: "ExpoIosTranslateModule",
+                                    code: 2,
+                                    userInfo: [NSLocalizedDescriptionKey: errorMessage]
+                                ))
+                            continuation.resume(
+                                throwing: NSError(
+                                    domain: "ExpoIosTranslateModule",
+                                    code: 2,
+                                    userInfo: [NSLocalizedDescriptionKey: friendlyMessage]
+                                ))
+                            self.dismissTranslationView()
+                        }
 
-                    props.shouldTranslate = true
+                        props.shouldTranslate = true
+                    }
                 }
             } else {
                 throw NSError(

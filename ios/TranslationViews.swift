@@ -39,17 +39,21 @@ struct IOSTranslateTasksAvailable: View {
     }
     do {
       var translatedTexts = Array(repeating: "", count: props.texts.count)
-    
+      var detectedSourceLanguage: String? = nil
+
       for try await response in session.translate(batch: requests) {
         if let index = Int(response.clientIdentifier ?? "") {
           translatedTexts[index] = response.targetText
         }
+        if detectedSourceLanguage == nil {
+          detectedSourceLanguage = response.sourceLanguage.languageCode.identifier
+        }
       }
-      DispatchQueue.main.async {
-        props.onSuccess?(translatedTexts)
+      await MainActor.run {
+        props.onSuccess?(translatedTexts, detectedSourceLanguage)
       }
     } catch {
-      DispatchQueue.main.async {
+      await MainActor.run {
         props.onError?(friendlyErrorMessage(from: error))
       }
     }
@@ -77,7 +81,9 @@ struct IOSTranslateSheet: View {
     if #available(iOS 17.4, *) {
       Color.clear
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .translationPresentation(isPresented: $props.isPresented, text: props.text)
+        .translationPresentation(isPresented: $props.isPresented, text: props.text) { translatedText in
+          props.text = translatedText
+        }
         .onChange(of: props.isPresented) { oldValue, newValue in
           if oldValue == true && newValue == false {
             props.onHide()
