@@ -41,13 +41,13 @@ export const onTranslateTask = async ({
   }
 };
 
-export const onTranslateSheet = async ({ input }: TranslationSheetRequest): Promise<string> => {
+export const onTranslateSheet = async ({ input }: TranslationSheetRequest): Promise<string | null> => {
   try {
     if (Platform.OS === 'android') {
       throw new Error('Sheet translation is not supported on Android.');
     }
     const response = await translateSheet({ input });
-    return response.translatedText;
+    return response.cancelled ? null : response.translatedText;
   } catch (error: unknown) {
     let errorMessage = 'An unknown error occurred during translation.';
     let errorCode: string | number | undefined;

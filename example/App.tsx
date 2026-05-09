@@ -93,7 +93,7 @@ export default function App() {
       setSheetResult('');
       setSheetLoading(true);
       const result = await onTranslateSheet({ input: SAMPLE_STRING });
-      setSheetResult(result);
+      if (result !== null) setSheetResult(result);
     } catch (err) {
       console.error('Sheet Translation Error', err);
       Alert.alert('Sheet Translation Error', String(err));

@@ -100,7 +100,7 @@ Key              | Type                                                  | Descr
 
 ### onTranslateSheet (iOS 17.4+)
 
-⚠️ **Not supported on Android**
+⚠️ **Not supported on Android or Web**
 
 Translates text using the Translation Sheet API.
 
@@ -110,7 +110,7 @@ Translates text using the Translation Sheet API.
 |-----------|------|-------------|
 | `input` | `string` | The text to be translated. |
 
-**Response:** `string` — The translated text.
+**Response:** `string | null` — The translated text, or `null` if the sheet was dismissed without translating.
 
 ---
 
@@ -126,10 +126,21 @@ try {
 } catch (error) {
   if (error instanceof TranslationError) {
     console.error(error.message); // Human-readable error message
-    console.error(error.code); // Error code (e.g., 'INVALID_PARAMETER', 'MODEL_DOWNLOAD_FAILED')
+    console.error(error.code); // Error code (see table below)
   }
 }
 ```
+
+**Error codes:**
+
+| Code | Description |
+|------|-------------|
+| `INVALID_PARAMETER` | Missing or invalid input / language code |
+| `MODEL_DOWNLOAD_FAILED` | Translation model could not be downloaded (Android) |
+| `TEXT_TRANSLATE_FAILED` | Translation of a specific text failed (Android) |
+| `LANGUAGE_ID_FAILED` | Language auto-detection failed (Android) |
+| `TRANSLATION_IN_PROGRESS` | A translation is already running — concurrent calls are not supported |
+| `UNSUPPORTED_PLATFORM` | Called on an unsupported platform (Web) |
 
 ## Contributing 🙌
 

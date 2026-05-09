@@ -94,15 +94,17 @@ class ExpoTranslateTextModule : Module() {
       // Guard against multiple promise settlements
       val settled = AtomicBoolean(false)
 
-      // Language identifier for auto detection
-      val languageIdentifier = LanguageIdentification.getClient(
-        LanguageIdentificationOptions.Builder()
-          .setConfidenceThreshold(0.5f)
-          .build()
-      )
-
       // Reusable translators keyed by "sourceLang-targetLang"
       val translators = mutableMapOf<String, com.google.mlkit.nl.translate.Translator>()
+
+      // Language identifier only needed when source language is not fixed
+      val languageIdentifier = if (fixedSourceLanguage == null) {
+        LanguageIdentification.getClient(
+          LanguageIdentificationOptions.Builder()
+            .setConfidenceThreshold(0.5f)
+            .build()
+        )
+      } else null
 
       // Pending step count
       val totalSteps = if (fixedSourceLanguage != null) {
@@ -117,7 +119,7 @@ class ExpoTranslateTextModule : Module() {
       // Cleanup helper
       val cleanup: () -> Unit = {
         translators.values.forEach { it.close() }
-        languageIdentifier.close()
+        languageIdentifier?.close()
       }
 
       // Safe reject — only settles the promise once
@@ -199,7 +201,7 @@ class ExpoTranslateTextModule : Module() {
           if (fixedSourceLanguage != null) {
             translateItem(item, fixedSourceLanguage)
           } else {
-            languageIdentifier.identifyLanguage(item.text)
+            languageIdentifier!!.identifyLanguage(item.text)
               .addOnSuccessListener { langCode ->
                 completionHandler() // detect step done
                 val detectedLangCode = if (langCode == "und") "en" else langCode

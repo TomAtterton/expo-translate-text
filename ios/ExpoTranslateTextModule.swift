@@ -7,31 +7,22 @@ import SwiftUI
 
 public class ExpoTranslateTextModule: Module {
     private var hostingController: UIHostingController<AnyView>?
+    private var isTranslating = false
 
     public func definition() -> ModuleDefinition {
         Name("ExpoTranslateText")
 
         AsyncFunction("translateSheet") {
             [weak self] (params: [String: Any]) async throws -> [String: Any] in
-            guard let self = self else {
-                throw NSError(
-                    domain: "ExpoIosTranslateModule",
-                    code: 0,
-                    userInfo: [NSLocalizedDescriptionKey: "Module deallocated"]
-                )
-            }
+            guard let self = self else { throw ModuleDeallocatedException() }
+            guard !self.isTranslating else { throw TranslationInProgressException() }
+            self.isTranslating = true
 
-            var textToTranslate: String = ""
-            if let text = params["input"] as? String {
-                textToTranslate = text
-            }
+            let textToTranslate = params["input"] as? String ?? ""
 
             guard !textToTranslate.isEmpty else {
-                throw NSError(
-                    domain: "ExpoIosTranslateModule",
-                    code: 3,
-                    userInfo: [NSLocalizedDescriptionKey: "No text provided for translation"]
-                )
+                self.isTranslating = false
+                throw InvalidParameterException()
             }
 
             let sheetProps = await MainActor.run {
@@ -44,45 +35,34 @@ public class ExpoTranslateTextModule: Module {
                 return try await withCheckedThrowingContinuation { continuation in
                     Task { @MainActor in
                         sheetProps.onHide = {
-                            let result: [String: Any] = [
-                                "translatedText": sheetProps.text
-                            ]
-                            continuation.resume(returning: result)
+                            self.isTranslating = false
                             self.dismissTranslationView()
+                            if sheetProps.didTranslate {
+                                continuation.resume(returning: ["translatedText": sheetProps.text, "cancelled": false])
+                            } else {
+                                continuation.resume(returning: ["translatedText": "", "cancelled": true])
+                            }
                         }
                         sheetProps.isPresented = true
                         self.presentTranslationSheet(sheetProps)
                     }
                 }
             } else {
-                throw NSError(
-                    domain: "ExpoIosTranslateModule",
-                    code: -1,
-                    userInfo: [
-                        NSLocalizedDescriptionKey:
-                            "Translation sheet is only supported on iOS 17.4 or newer"
-                    ]
-                )
+                self.isTranslating = false
+                throw UnsupportedOSVersionException("17.4")
             }
         }
 
         AsyncFunction("translateTask") {
             [weak self] (params: [String: Any]) async throws -> [String: Any] in
-            guard let self = self else {
-                throw NSError(
-                    domain: "ExpoIosTranslateModule",
-                    code: 0,
-                    userInfo: [NSLocalizedDescriptionKey: "Module deallocated"]
-                )
-            }
+            guard let self = self else { throw ModuleDeallocatedException() }
+            guard !self.isTranslating else { throw TranslationInProgressException() }
+            self.isTranslating = true
 
             let (texts, inputType, dictMapping) = parseTexts(from: params)
             guard !texts.isEmpty else {
-                throw NSError(
-                    domain: "ExpoIosTranslateModule",
-                    code: 3,
-                    userInfo: [NSLocalizedDescriptionKey: "No texts provided for translation"]
-                )
+                self.isTranslating = false
+                throw InvalidParameterException()
             }
 
             let targetLangCode = params["targetLangCode"] as? String ?? "en"
@@ -101,6 +81,7 @@ public class ExpoTranslateTextModule: Module {
                 return try await withCheckedThrowingContinuation { continuation in
                     Task { @MainActor in
                         props.onSuccess = { translatedTexts, detectedSourceLanguage in
+                            self.isTranslating = false
                             let resolvedSourceLanguage = sourceLangCode ?? detectedSourceLanguage
                             let result: [String: Any]
                             if inputType == .dictionary, let mapping = dictMapping {
@@ -139,33 +120,19 @@ public class ExpoTranslateTextModule: Module {
                         }
 
                         props.onError = { errorMessage in
-                            let friendlyMessage = friendlyErrorMessage(
-                                from: NSError(
-                                    domain: "ExpoIosTranslateModule",
-                                    code: 2,
-                                    userInfo: [NSLocalizedDescriptionKey: errorMessage]
-                                ))
-                            continuation.resume(
-                                throwing: NSError(
-                                    domain: "ExpoIosTranslateModule",
-                                    code: 2,
-                                    userInfo: [NSLocalizedDescriptionKey: friendlyMessage]
-                                ))
+                            self.isTranslating = false
+                            continuation.resume(throwing: NSError(
+                                domain: "ExpoIosTranslateModule",
+                                code: 2,
+                                userInfo: [NSLocalizedDescriptionKey: errorMessage]
+                            ))
                             self.dismissTranslationView()
                         }
-
-                        props.shouldTranslate = true
                     }
                 }
             } else {
-                throw NSError(
-                    domain: "ExpoIosTranslateModule",
-                    code: -1,
-                    userInfo: [
-                        NSLocalizedDescriptionKey:
-                            "Translation is only supported on iOS 18.0 or newer"
-                    ]
-                )
+                self.isTranslating = false
+                throw UnsupportedOSVersionException("18.0")
             }
         }
     }

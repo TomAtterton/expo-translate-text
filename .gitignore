@@ -52,6 +52,10 @@ node_modules/
 npm-debug.log
 yarn-debug.log
 yarn-error.log
+example/bun.lock
 
 # Expo
 .expo/*
+
+# Claude Code
+CLAUDE.md

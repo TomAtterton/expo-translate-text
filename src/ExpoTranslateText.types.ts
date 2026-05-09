@@ -20,6 +20,7 @@ export interface BatchTranslationTaskResult {
 
 export interface TranslationSheetResult {
   translatedText: string;
+  cancelled: boolean;
 }
 
 export interface TranslationSheetRequest {

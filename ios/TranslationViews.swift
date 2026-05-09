@@ -46,7 +46,7 @@ struct IOSTranslateTasksAvailable: View {
           translatedTexts[index] = response.targetText
         }
         if detectedSourceLanguage == nil {
-          detectedSourceLanguage = response.sourceLanguage.languageCode.identifier
+          detectedSourceLanguage = response.sourceLanguage.languageCode?.identifier
         }
       }
       await MainActor.run {
@@ -54,7 +54,7 @@ struct IOSTranslateTasksAvailable: View {
       }
     } catch {
       await MainActor.run {
-        props.onError?(friendlyErrorMessage(from: error))
+        props.onError?(error.localizedDescription)
       }
     }
   }
@@ -83,6 +83,7 @@ struct IOSTranslateSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .translationPresentation(isPresented: $props.isPresented, text: props.text) { translatedText in
           props.text = translatedText
+          props.didTranslate = true
         }
         .onChange(of: props.isPresented) { oldValue, newValue in
           if oldValue == true && newValue == false {

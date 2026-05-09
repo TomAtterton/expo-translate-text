@@ -1,4 +1,5 @@
 import { requireNativeModule } from 'expo-modules-core';
+import { Platform } from 'react-native';
 import { ExpoTranslateTextModule } from './ExpoTranslateText.types';
 
 export class TranslationError extends Error {
@@ -11,7 +12,12 @@ export class TranslationError extends Error {
   }
 }
 
-const ExpoIosTranslate = requireNativeModule<ExpoTranslateTextModule>('ExpoTranslateText');
+const ExpoIosTranslate =
+  Platform.OS !== 'web' ? requireNativeModule<ExpoTranslateTextModule>('ExpoTranslateText') : null;
 
-export const translateTask = ExpoIosTranslate.translateTask;
-export const translateSheet = ExpoIosTranslate.translateSheet;
+export const translateTask = ExpoIosTranslate?.translateTask ?? (() => {
+  throw new TranslationError('expo-translate-text is not supported on web.', 'UNSUPPORTED_PLATFORM');
+});
+export const translateSheet = ExpoIosTranslate?.translateSheet ?? (() => {
+  throw new TranslationError('expo-translate-text is not supported on web.', 'UNSUPPORTED_PLATFORM');
+});

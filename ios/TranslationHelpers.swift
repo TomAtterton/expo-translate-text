@@ -1,8 +1,33 @@
+import ExpoModulesCore
 import Foundation
 #if canImport(Translation)
 import Translation
 #endif
 import SwiftUI
+
+// MARK: - Exceptions
+
+internal final class ModuleDeallocatedException: Exception {
+  override var reason: String { "Module deallocated" }
+}
+
+internal final class InvalidParameterException: Exception {
+  override var reason: String { "No text provided for translation" }
+}
+
+internal final class TranslationInProgressException: Exception {
+  override var reason: String { "A translation is already in progress" }
+}
+
+
+internal final class UnsupportedOSVersionException: Exception {
+  private let minimumVersion: String
+  init(_ minimumVersion: String) {
+    self.minimumVersion = minimumVersion
+    super.init()
+  }
+  override var reason: String { "Translation is only supported on iOS \(minimumVersion) or newer" }
+}
 
 // MARK: - Helper Types & Functions
 
@@ -43,17 +68,6 @@ typealias DictMapping = [String: (isArray: Bool, indices: [Int])]
   }
 
   return ([], .array, nil)
-}
-
-/// Converts an Error into a friendly string.
-/// - Parameter error: The error to convert.
-/// - Returns: A user-friendly error message.
-@available(iOS 18.0, *)
-func friendlyErrorMessage(from error: Error) -> String {
-  if let translationError = error as? TranslationError {
-    return translationError.errorDescription ?? "A translation error occurred."
-  }
-  return error.localizedDescription
 }
 
 @available(iOS 18.0, *)
