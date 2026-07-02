@@ -5,8 +5,20 @@ public class Props: ObservableObject {
   @Published var texts: [String] = []
   @Published var onSuccess: (([String], String?) -> Void)?
   @Published var onError: ((String) -> Void)?
+  @Published var onCancel: (() -> Void)?
   @Published var sourceLanguage: String?
   @Published var targetLanguage: String?
+  @Published var preferredStrategy: String?
+}
+
+@MainActor
+public class PrepareProps: ObservableObject {
+  @Published var onSuccess: (() -> Void)?
+  @Published var onError: ((String) -> Void)?
+  @Published var onCancel: (() -> Void)?
+  @Published var sourceLanguage: String?
+  @Published var targetLanguage: String?
+  @Published var preferredStrategy: String?
 }
 
 @MainActor

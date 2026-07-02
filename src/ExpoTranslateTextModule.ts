@@ -32,3 +32,11 @@ export const translateSheet =
       'UNSUPPORTED_PLATFORM',
     );
   });
+export const prepareTranslation =
+  ExpoIosTranslate?.prepareTranslation ??
+  (() => {
+    throw new TranslationError(
+      'expo-translate-text is not supported on web.',
+      'UNSUPPORTED_PLATFORM',
+    );
+  });

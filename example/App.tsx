@@ -10,18 +10,19 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { onTranslateTask, onTranslateSheet } from 'expo-translate-text';
-import { TranslationTaskResult } from "expo-translate-text/ExpoTranslateText.types";
+import { onPrepareTranslation, onTranslateSheet, onTranslateTask } from 'expo-translate-text';
+import type {
+  TranslationStrategy,
+  TranslationTaskResult,
+} from 'expo-translate-text/ExpoTranslateText.types';
 
-type LanguageCode = 'it' | 'de' | 'fr' | 'es';
+type LanguageCode = 'it' | 'de' | 'fr' | 'es' | 'ja' | 'ko';
 type InputType = 'String' | 'Array' | 'Object';
+type PrepareStatus = 'idle' | 'ready' | 'cancelled' | 'error';
 
 // Predefined sample inputs:
 const SAMPLE_STRING = 'Hello world! This is a sample text to translate.';
-const SAMPLE_ARRAY = [
-  'Hello world! This is a sample text to translate.',
-  'How are you today?',
-];
+const SAMPLE_ARRAY = ['Hello world! This is a sample text to translate.', 'How are you today?'];
 const SAMPLE_OBJECT = {
   greeting: 'Hello world! This is a sample text to translate.',
   question: 'How are you today?',
@@ -31,15 +32,17 @@ export default function App() {
   /**
    * STATES
    */
-      // Which language is currently selected?
+  // Which language is currently selected?
   const [selectedLanguage, setSelectedLanguage] = useState<LanguageCode>('de');
 
   // Which input type is currently selected?
   const [selectedInputType, setSelectedInputType] = useState<InputType>('String');
+  const [selectedStrategy, setSelectedStrategy] = useState<TranslationStrategy>('lowLatency');
+  const [prepareStatus, setPrepareStatus] = useState<PrepareStatus>('idle');
 
   // Where we store the translation result
   const [translatedResult, setTranslatedResult] = useState<
-      string | string[] | { [key: string]: string | string[] }
+    string | string[] | { [key: string]: string | string[] }
   >('');
 
   // Where we store the result of "sheet" translation (iOS only)
@@ -48,6 +51,7 @@ export default function App() {
   // Loading states for translation and sheet translation
   const [loading, setLoading] = useState<boolean>(false);
   const [sheetLoading, setSheetLoading] = useState<boolean>(false);
+  const [prepareLoading, setPrepareLoading] = useState<boolean>(false);
 
   /**
    *  We generate the translation input based on whichever input type is selected.
@@ -73,6 +77,7 @@ export default function App() {
       const result: TranslationTaskResult = await onTranslateTask({
         input: translationInput,
         targetLangCode: selectedLanguage, // e.g., 'de', 'fr', 'it', 'es'
+        preferredStrategy: selectedStrategy,
       });
       setTranslatedResult(result.translatedTexts);
     } catch (err) {
@@ -80,6 +85,29 @@ export default function App() {
       Alert.alert('Translation Error', String(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePrepareTranslation = async () => {
+    if (Platform.OS !== 'ios') {
+      Alert.alert('Not available', 'Preparing Apple translation is only supported on iOS.');
+      return;
+    }
+    try {
+      setPrepareStatus('idle');
+      setPrepareLoading(true);
+      const result = await onPrepareTranslation({
+        sourceLangCode: 'en',
+        targetLangCode: selectedLanguage,
+        preferredStrategy: selectedStrategy,
+      });
+      setPrepareStatus(result.status === 'cancelled' ? 'cancelled' : 'ready');
+    } catch (err) {
+      console.error('Prepare Translation Error', err);
+      setPrepareStatus('error');
+      Alert.alert('Prepare Translation Error', String(err));
+    } finally {
+      setPrepareLoading(false);
     }
   };
 
@@ -93,7 +121,7 @@ export default function App() {
       setSheetResult('');
       setSheetLoading(true);
       const result = await onTranslateSheet({ input: SAMPLE_STRING });
-      if (result !== null) setSheetResult(result);
+      setSheetResult(result ?? 'Dismissed without translating.');
     } catch (err) {
       console.error('Sheet Translation Error', err);
       Alert.alert('Sheet Translation Error', String(err));
@@ -106,114 +134,172 @@ export default function App() {
    * UI RENDERING
    */
   return (
-      <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
-          {/* Header */}
-          <Text style={styles.header}>Translator</Text>
-          <Text style={styles.subHeader}>Translate Tasks for React Native</Text>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        {/* Header */}
+        <Text style={styles.header}>Translator</Text>
+        <Text style={styles.subHeader}>Translate Tasks for React Native</Text>
 
-          {/* Language Selection */}
-          <Text style={styles.sectionTitle}>Select Target Language</Text>
-          <View style={styles.buttonRow}>
-            {(['it', 'fr', 'es', 'de'] as LanguageCode[]).map((lang) => (
+        {/* Language Selection */}
+        <Text style={styles.sectionTitle}>Select Target Language</Text>
+        <View style={styles.buttonRow}>
+          {(['it', 'fr', 'es', 'de', 'ja', 'ko'] as LanguageCode[]).map((lang) => (
+            <TouchableOpacity
+              key={lang}
+              style={[styles.pillButton, selectedLanguage === lang && styles.selectedPillButton]}
+              onPress={() => setSelectedLanguage(lang)}
+            >
+              <Text
+                style={[
+                  styles.pillButtonText,
+                  selectedLanguage === lang && styles.selectedPillButtonText,
+                ]}
+              >
+                {lang}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {Platform.OS === 'ios' && (
+          <>
+            <Text style={styles.sectionTitle}>Preferred Strategy (iOS 26.4+)</Text>
+            <View style={styles.buttonRow}>
+              {(['lowLatency', 'highFidelity'] as TranslationStrategy[]).map((strategy) => (
                 <TouchableOpacity
-                    key={lang}
-                    style={[
-                      styles.pillButton,
-                      selectedLanguage === lang && styles.selectedPillButton,
-                    ]}
-                    onPress={() => setSelectedLanguage(lang)}>
+                  key={strategy}
+                  style={[
+                    styles.pillButton,
+                    selectedStrategy === strategy && styles.selectedPillButton,
+                  ]}
+                  onPress={() => {
+                    setSelectedStrategy(strategy);
+                    setPrepareStatus('idle');
+                  }}
+                >
                   <Text
-                      style={[
-                        styles.pillButtonText,
-                        selectedLanguage === lang && styles.selectedPillButtonText,
-                      ]}>
-                    {lang}
+                    style={[
+                      styles.pillButtonText,
+                      selectedStrategy === strategy && styles.selectedPillButtonText,
+                    ]}
+                  >
+                    {strategy}
                   </Text>
                 </TouchableOpacity>
-            ))}
-          </View>
+              ))}
+            </View>
 
-          {/* Input Type Selection */}
-          <Text style={styles.sectionTitle}>Select Input Type</Text>
-          <View style={styles.buttonRow}>
-            {(['String', 'Array', 'Object'] as InputType[]).map((type) => (
-                <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.pillButton,
-                      selectedInputType === type && styles.selectedPillButton,
-                    ]}
-                    onPress={() => setSelectedInputType(type)}>
-                  <Text
-                      style={[
-                        styles.pillButtonText,
-                        selectedInputType === type && styles.selectedPillButtonText,
-                      ]}>
-                    {type}
-                  </Text>
-                </TouchableOpacity>
-            ))}
-          </View>
+            <TouchableOpacity
+              style={styles.prepareButton}
+              onPress={handlePrepareTranslation}
+              disabled={prepareLoading}
+            >
+              {prepareLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.prepareButtonText}>Prepare Translation</Text>
+              )}
+            </TouchableOpacity>
+            {prepareStatus !== 'idle' && (
+              <Text
+                style={[
+                  styles.statusText,
+                  prepareStatus === 'ready'
+                    ? styles.statusReady
+                    : prepareStatus === 'cancelled'
+                      ? styles.statusCancelled
+                      : styles.statusError,
+                ]}
+              >
+                {prepareStatus === 'ready' && 'Translation model is ready.'}
+                {prepareStatus === 'cancelled' && 'Translation preparation was cancelled.'}
+                {prepareStatus === 'error' && 'Translation model preparation failed.'}
+              </Text>
+            )}
+          </>
+        )}
 
-          {/* Original Text Card */}
+        {/* Input Type Selection */}
+        <Text style={styles.sectionTitle}>Select Input Type</Text>
+        <View style={styles.buttonRow}>
+          {(['String', 'Array', 'Object'] as InputType[]).map((type) => (
+            <TouchableOpacity
+              key={type}
+              style={[styles.pillButton, selectedInputType === type && styles.selectedPillButton]}
+              onPress={() => setSelectedInputType(type)}
+            >
+              <Text
+                style={[
+                  styles.pillButtonText,
+                  selectedInputType === type && styles.selectedPillButtonText,
+                ]}
+              >
+                {type}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Original Text Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Original Text</Text>
+          <Text style={styles.cardText}>
+            {typeof translationInput === 'string'
+              ? translationInput
+              : JSON.stringify(translationInput, null, 2)}
+          </Text>
+        </View>
+
+        {/* Translate Button */}
+        <TouchableOpacity
+          style={styles.translateButton}
+          onPress={handleTranslate}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.translateButtonText}>Translate</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Translated Card (if we have a result) */}
+        {translatedResult ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Original Text</Text>
+            <Text style={styles.cardTitle}>Translated Text</Text>
             <Text style={styles.cardText}>
-              {typeof translationInput === 'string'
-                  ? translationInput
-                  : JSON.stringify(translationInput, null, 2)}
+              {typeof translatedResult === 'string'
+                ? translatedResult
+                : JSON.stringify(translatedResult, null, 2)}
             </Text>
           </View>
+        ) : null}
 
-          {/* Translate Button */}
-          <TouchableOpacity
-              style={styles.translateButton}
-              onPress={handleTranslate}
-              disabled={loading}>
-            {loading ? (
+        {/* iOS-only: Translate Sheet */}
+        {Platform.OS === 'ios' && (
+          <>
+            <Text style={styles.sectionTitle}>Translate Sheet (iOS Only)</Text>
+            <TouchableOpacity
+              style={styles.sheetButton}
+              onPress={handleTranslateSheet}
+              disabled={sheetLoading}
+            >
+              {sheetLoading ? (
                 <ActivityIndicator color="#fff" />
-            ) : (
-                <Text style={styles.translateButtonText}>Translate</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Translated Card (if we have a result) */}
-          {translatedResult ? (
+              ) : (
+                <Text style={styles.sheetButtonText}>Translate with Sheet</Text>
+              )}
+            </TouchableOpacity>
+            {!!sheetResult && (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>Translated Text</Text>
-                <Text style={styles.cardText}>
-                  {typeof translatedResult === 'string'
-                      ? translatedResult
-                      : JSON.stringify(translatedResult, null, 2)}
-                </Text>
+                <Text style={styles.cardTitle}>Sheet Translation</Text>
+                <Text style={styles.cardText}>{sheetResult}</Text>
               </View>
-          ) : null}
-
-          {/* iOS-only: Translate Sheet */}
-          {Platform.OS === 'ios' && (
-              <>
-                <Text style={styles.sectionTitle}>Translate Sheet (iOS Only)</Text>
-                <TouchableOpacity
-                    style={styles.sheetButton}
-                    onPress={handleTranslateSheet}
-                    disabled={sheetLoading}>
-                  {sheetLoading ? (
-                      <ActivityIndicator color="#fff" />
-                  ) : (
-                      <Text style={styles.sheetButtonText}>Translate with Sheet</Text>
-                  )}
-                </TouchableOpacity>
-                {!!sheetResult && (
-                    <View style={styles.card}>
-                      <Text style={styles.cardTitle}>Sheet Translation</Text>
-                      <Text style={styles.cardText}>{sheetResult}</Text>
-                    </View>
-                )}
-              </>
-          )}
-        </ScrollView>
-      </SafeAreaView>
+            )}
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -315,5 +401,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  prepareButton: {
+    backgroundColor: '#364FC7',
+    paddingVertical: 14,
+    borderRadius: 8,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  prepareButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  statusText: {
+    fontSize: 14,
+    marginBottom: 10,
+  },
+  statusReady: {
+    color: '#2F9E44',
+  },
+  statusCancelled: {
+    color: '#5C677D',
+  },
+  statusError: {
+    color: '#C92A2A',
   },
 });

@@ -21,6 +21,7 @@ struct IOSTranslateTasks: View {
 struct IOSTranslateTasksAvailable: View {
   @ObservedObject var props: Props
   @State private var configuration: TranslationSession.Configuration?
+  @State private var didComplete = false
 
   var body: some View {
     Color.clear
@@ -30,6 +31,11 @@ struct IOSTranslateTasksAvailable: View {
       }
       .onAppear {
         configuration = makeConfiguration(from: props)
+      }
+      .onDisappear {
+        if !didComplete {
+          props.onCancel?()
+        }
       }
   }
 
@@ -50,10 +56,12 @@ struct IOSTranslateTasksAvailable: View {
         }
       }
       await MainActor.run {
+        didComplete = true
         props.onSuccess?(translatedTexts, detectedSourceLanguage)
       }
     } catch {
       await MainActor.run {
+        didComplete = true
         props.onError?(error.localizedDescription)
       }
     }
@@ -66,8 +74,70 @@ struct IOSTranslateTasksUnavailable: View {
   var body: some View {
     Color.clear
       .onAppear {
-        NSLog("TranslationSession and translationTask are only supported on iOS 18.0 or newer.")
         props.onError?("Translation is only supported on iOS 18.0 or newer")
+      }
+  }
+}
+
+// MARK: - SwiftUI View for Preparing Translation
+
+struct IOSPrepareTranslation: View {
+  @ObservedObject var props: PrepareProps
+
+  var body: some View {
+    if #available(iOS 18.0, *) {
+      IOSPrepareTranslationAvailable(props: props)
+    } else {
+      IOSPrepareTranslationUnavailable(props: props)
+    }
+  }
+}
+
+@available(iOS 18.0, *)
+struct IOSPrepareTranslationAvailable: View {
+  @ObservedObject var props: PrepareProps
+  @State private var configuration: TranslationSession.Configuration?
+  @State private var didComplete = false
+
+  var body: some View {
+    Color.clear
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .translationTask(configuration) { session in
+        await prepare(session)
+      }
+      .onAppear {
+        configuration = makeConfiguration(from: props)
+      }
+      .onDisappear {
+        if !didComplete {
+          props.onCancel?()
+        }
+      }
+  }
+
+  private func prepare(_ session: TranslationSession) async {
+    do {
+      try await session.prepareTranslation()
+      await MainActor.run {
+        didComplete = true
+        props.onSuccess?()
+      }
+    } catch {
+      await MainActor.run {
+        didComplete = true
+        props.onError?(error.localizedDescription)
+      }
+    }
+  }
+}
+
+struct IOSPrepareTranslationUnavailable: View {
+  @ObservedObject var props: PrepareProps
+
+  var body: some View {
+    Color.clear
+      .onAppear {
+        props.onError?("Preparing translation is only supported on iOS 18.0 or newer")
       }
   }
 }

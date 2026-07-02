@@ -69,7 +69,7 @@ PODS:
   - ExpoModulesWorklets (57.0.1):
     - ExpoModulesCore
     - ExpoModulesJSI
-  - ExpoTranslateText (0.2.1):
+  - ExpoTranslateText (0.3.0):
     - ExpoModulesCore
   - FBLazyVector (0.86.0)
   - hermes-engine (250829098.0.14):

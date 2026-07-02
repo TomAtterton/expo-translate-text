@@ -8,14 +8,11 @@
 ![GitHub stars](https://img.shields.io/github/stars/TomAtterton/expo-translate-text)
 ![GitHub license](https://img.shields.io/github/license/TomAtterton/expo-translate-text)
 
-
 ## Demo 💫
 
 ![Demo GIF](./resources/Translate_iOS.gif)
 
-
 ## Installation 📦
-
 
 ```sh
 expo install expo-translate-text
@@ -23,10 +20,10 @@ expo install expo-translate-text
 
 ## Platform Support 📱
 
-| Platform  | Translation Task | Translation Sheet |
-|-----------|----------------|------------------|
-| iOS   | ✅ Supported (iOS 18+)   | ✅ Supported (iOS 17.4+) |
-| Android   | ✅ Supported   | ❌ Not Supported |
+| Platform | Translation Task       | Prepare Translation    | Translation Sheet        |
+| -------- | ---------------------- | ---------------------- | ------------------------ |
+| iOS      | ✅ Supported (iOS 18+) | ✅ Supported (iOS 18+) | ✅ Supported (iOS 17.4+) |
+| Android  | ✅ Supported           | ❌ Not Supported       | ❌ Not Supported         |
 
 ## Usage 🚀
 
@@ -41,6 +38,7 @@ const translateText = async () => {
       input: 'Hello, world!',
       sourceLangCode: 'en',
       targetLangCode: 'es',
+      preferredStrategy: 'lowLatency',
     });
     console.log(result.translatedTexts); // "¡Hola, mundo!"
   } catch (error) {
@@ -49,8 +47,43 @@ const translateText = async () => {
 };
 ```
 
-### Translation Sheet (iOS Only)
+### Translation Strategy (iOS Only)
 
+`preferredStrategy` lets iOS choose between faster translation and higher-quality translation when the device supports that choice. It is optional and safe to omit.
+
+- `lowLatency` prefers speed.
+- `highFidelity` prefers more fluent wording when available.
+
+Apple's strategy API is available on iOS 26.4 and newer. On older iOS versions, this module accepts the option but falls back to the normal Apple translation behavior. See Apple's [`TranslationSession.Strategy`](https://developer.apple.com/documentation/translation/translationsession/strategy) documentation for the platform details.
+
+### Prepare Translation Models (iOS Only)
+
+```tsx
+import { onPrepareTranslation } from 'expo-translate-text';
+import { Platform } from 'react-native';
+
+const prepareTranslation = async () => {
+  if (Platform.OS !== 'ios') {
+    return;
+  }
+
+  const result = await onPrepareTranslation({
+    sourceLangCode: 'en',
+    targetLangCode: 'es',
+    preferredStrategy: 'highFidelity',
+  });
+
+  if (result.status === 'prepared') {
+    console.log('Languages are ready.');
+  }
+
+  if (result.status === 'cancelled') {
+    console.log('Preparation was cancelled.');
+  }
+};
+```
+
+### Translation Sheet (iOS Only)
 
 ```tsx
 import { onTranslateSheet } from 'expo-translate-text';
@@ -76,25 +109,49 @@ const translateSheet = async () => {
 ## API Reference 📖
 
 ### onTranslateTask
+
 Translates a given text or batch of text.
 
 **Request:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `input` | `string` \| `string[]` \| `{ [key: string]: string \| string[] }` | Text to be translated. |
-| `sourceLangCode?` | `string` | Source language code (e.g., 'en'). If omitted, the source language is auto-detected. |
-| `targetLangCode?` | `string` | Target language code (e.g., 'es'). Defaults to `'en'`. |
-| `requireCharging?` | `boolean` | Requires device to be charging (Android only). |
-| `requiresWifi?` | `boolean` | Requires WiFi for translation (Android only). |
+| Parameter            | Type                                                              | Description                                                                                      |
+| -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `input`              | `string` \| `string[]` \| `{ [key: string]: string \| string[] }` | Text to be translated.                                                                           |
+| `sourceLangCode?`    | `string`                                                          | Source language code (e.g., 'en'). If omitted, the source language is auto-detected.             |
+| `targetLangCode?`    | `string`                                                          | Target language code (e.g., 'es'). Defaults to `'en'`.                                           |
+| `preferredStrategy?` | `'lowLatency' \| 'highFidelity'`                                  | Preferred Apple translation strategy on iOS 26.4+. Falls back on older iOS versions and Android. |
+| `requireCharging?`   | `boolean`                                                         | Requires device to be charging (Android only).                                                   |
+| `requiresWifi?`      | `boolean`                                                         | Requires WiFi for translation (Android only).                                                    |
 
 **Response:**
 
-Key              | Type                                                  | Description
---------------- | ----------------------------------------------------- | -------------
-`translatedTexts` | `string` \| `string[]` \| `{ [key: string]: string \| string[] }` | The translated text(s).
-`sourceLanguage` | `string` \| `null`                                   | The detected or provided source language, or `null` if detection failed.
-`targetLanguage` | `string`                                             | The requested target language.
+| Key               | Type                                                              | Description                                                              |
+| ----------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `translatedTexts` | `string` \| `string[]` \| `{ [key: string]: string \| string[] }` | The translated text(s).                                                  |
+| `sourceLanguage`  | `string` \| `null`                                                | The detected or provided source language, or `null` if detection failed. |
+| `targetLanguage`  | `string`                                                          | The requested target language.                                           |
+
+---
+
+### onPrepareTranslation (iOS 18+)
+
+⚠️ **Not supported on Android or Web**
+
+Asks the system to prepare/download translation resources before translating.
+
+**Request:**
+
+| Parameter            | Type                             | Description                                                                                       |
+| -------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `sourceLangCode`     | `string`                         | Source language code (e.g., 'en'). Required because preparation has no input text to auto-detect. |
+| `targetLangCode?`    | `string`                         | Target language code (e.g., 'es'). Defaults to `'en'`.                                            |
+| `preferredStrategy?` | `'lowLatency' \| 'highFidelity'` | Preferred Apple translation strategy on iOS 26.4+. Falls back on older iOS versions.              |
+
+**Response:**
+
+`Promise<{ status: 'prepared' } | { status: 'cancelled' }>`
+
+`cancelled` means the preparation flow ended before the language pair was prepared. Errors such as unsupported platform, invalid parameters, or Apple failing to prepare translation are thrown as `TranslationError`.
 
 ---
 
@@ -106,9 +163,9 @@ Translates text using the Translation Sheet API.
 
 **Request:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `input` | `string` | The text to be translated. |
+| Parameter | Type     | Description                |
+| --------- | -------- | -------------------------- |
+| `input`   | `string` | The text to be translated. |
 
 **Response:** `string | null` — The translated text, or `null` if the sheet was dismissed without translating.
 
@@ -116,7 +173,7 @@ Translates text using the Translation Sheet API.
 
 ### Error Handling
 
-Both functions throw a `TranslationError` on failure:
+The public functions throw a `TranslationError` on failure:
 
 ```tsx
 import { TranslationError } from 'expo-translate-text';
@@ -133,14 +190,14 @@ try {
 
 **Error codes:**
 
-| Code | Description |
-|------|-------------|
-| `INVALID_PARAMETER` | Missing or invalid input / language code |
-| `MODEL_DOWNLOAD_FAILED` | Translation model could not be downloaded (Android) |
-| `TEXT_TRANSLATE_FAILED` | Translation of a specific text failed (Android) |
-| `LANGUAGE_ID_FAILED` | Language auto-detection failed (Android) |
+| Code                      | Description                                                           |
+| ------------------------- | --------------------------------------------------------------------- |
+| `INVALID_PARAMETER`       | Missing or invalid input / language code                              |
+| `MODEL_DOWNLOAD_FAILED`   | Translation model could not be downloaded (Android)                   |
+| `TEXT_TRANSLATE_FAILED`   | Translation of a specific text failed (Android)                       |
+| `LANGUAGE_ID_FAILED`      | Language auto-detection failed (Android)                              |
 | `TRANSLATION_IN_PROGRESS` | A translation is already running — concurrent calls are not supported |
-| `UNSUPPORTED_PLATFORM` | Called on an unsupported platform (Web) |
+| `UNSUPPORTED_PLATFORM`    | Called on an unsupported platform                                      |
 
 ## Contributing 🙌
 

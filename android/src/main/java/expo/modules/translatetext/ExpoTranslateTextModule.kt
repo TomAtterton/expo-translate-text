@@ -108,8 +108,8 @@ class ExpoTranslateTextModule : Module() {
 
       // Pending step count
       val totalSteps = if (fixedSourceLanguage != null) {
-        // 1 model download + N translations
-        items.size + 1
+        // Per item: 1 download + 1 translate = 2
+        items.size * 2
       } else {
         // Per item: 1 detect + 1 download + 1 translate = 3
         items.size * 3
@@ -215,28 +215,7 @@ class ExpoTranslateTextModule : Module() {
         }
       }
 
-      // If fixed source, pre-download the model once, then process
-      if (fixedSourceLanguage != null) {
-        val translator = Translation.getClient(
-          TranslatorOptions.Builder()
-            .setSourceLanguage(fixedSourceLanguage)
-            .setTargetLanguage(targetLanguage)
-            .build()
-        )
-        synchronized(translators) {
-          translators["fixed"] = translator
-        }
-        translator.downloadModelIfNeeded(conditions)
-          .addOnSuccessListener {
-            completionHandler() // single model download done
-            processItems()
-          }
-          .addOnFailureListener { e ->
-            safeReject("MODEL_DOWNLOAD_FAILED", e.message ?: "Model download failed", e)
-          }
-      } else {
-        processItems()
-      }
+      processItems()
 
     } catch (e: CodedException) {
       promise.reject(e)
