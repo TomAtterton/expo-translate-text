@@ -1,4 +1,6 @@
-import {
+import { Platform } from 'react-native';
+
+import type {
   TranslationSheetRequest,
   TranslationTaskRequest,
   TranslationTaskResult,
@@ -11,7 +13,6 @@ export type {
   TranslationTaskResult,
   TranslationSheetRequest,
 } from './ExpoTranslateText.types';
-import { Platform } from 'react-native';
 
 export const onTranslateTask = async ({
   input,
@@ -41,7 +42,9 @@ export const onTranslateTask = async ({
   }
 };
 
-export const onTranslateSheet = async ({ input }: TranslationSheetRequest): Promise<string | null> => {
+export const onTranslateSheet = async ({
+  input,
+}: TranslationSheetRequest): Promise<string | null> => {
   try {
     if (Platform.OS === 'android') {
       throw new Error('Sheet translation is not supported on Android.');
