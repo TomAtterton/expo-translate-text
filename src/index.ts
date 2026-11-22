@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 
 import type {
+  LanguageAvailabilityRequest,
+  LanguageAvailabilityStatus,
   PrepareTranslationRequest,
   PrepareTranslationResult,
   TranslationSheetRequest,
@@ -8,6 +10,8 @@ import type {
   TranslationTaskResult,
 } from './ExpoTranslateText.types';
 import {
+  getLanguageAvailability,
+  getSupportedLanguages,
   prepareTranslation,
   translateTask,
   translateSheet,
@@ -16,6 +20,8 @@ import {
 
 export { TranslationError } from './ExpoTranslateTextModule';
 export type {
+  LanguageAvailabilityRequest,
+  LanguageAvailabilityStatus,
   PrepareTranslationRequest,
   PrepareTranslationResult,
   TranslationStrategy,
@@ -100,5 +106,46 @@ export const onPrepareTranslation = async (
     }
     const translationError = new TranslationError(errorMessage, errorCode);
     throw translationError;
+  }
+};
+
+export const onGetSupportedLanguages = async (): Promise<string[]> => {
+  try {
+    return await getSupportedLanguages();
+  } catch (error: unknown) {
+    let errorMessage = 'An unknown error occurred while getting supported languages.';
+    let errorCode: string | number | undefined;
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      if ('code' in error) {
+        errorCode = (error as TranslationError).code;
+      }
+    }
+    throw new TranslationError(errorMessage, errorCode);
+  }
+};
+
+export const onGetLanguageAvailability = async ({
+  sourceLangCode,
+  targetLangCode,
+  preferredStrategy,
+}: LanguageAvailabilityRequest): Promise<LanguageAvailabilityStatus> => {
+  try {
+    const result = await getLanguageAvailability({
+      sourceLangCode,
+      targetLangCode,
+      preferredStrategy,
+    });
+    return result.status;
+  } catch (error: unknown) {
+    let errorMessage = 'An unknown error occurred while checking language availability.';
+    let errorCode: string | number | undefined;
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      if ('code' in error) {
+        errorCode = (error as TranslationError).code;
+      }
+    }
+    throw new TranslationError(errorMessage, errorCode);
   }
 };

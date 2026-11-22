@@ -43,10 +43,28 @@ export interface NativePrepareTranslationResult {
   cancelled: boolean;
 }
 
+export type LanguageAvailabilityStatus = 'installed' | 'supported' | 'unsupported';
+
+export interface LanguageAvailabilityRequest {
+  sourceLangCode: string;
+  targetLangCode?: string;
+  preferredStrategy?: TranslationStrategy;
+}
+
+export interface NativeLanguageAvailabilityResult {
+  status: LanguageAvailabilityStatus;
+}
+
 export interface ExpoTranslateTextModule {
   translateTask(params: TranslationTaskRequest): Promise<BatchTranslationTaskResult>;
 
   translateSheet(params: TranslationSheetRequest): Promise<TranslationSheetResult>;
 
   prepareTranslation(params: PrepareTranslationRequest): Promise<NativePrepareTranslationResult>;
+
+  getSupportedLanguages(): Promise<string[]>;
+
+  getLanguageAvailability(
+    params: LanguageAvailabilityRequest,
+  ): Promise<NativeLanguageAvailabilityResult>;
 }
