@@ -40,3 +40,19 @@ export const prepareTranslation =
       'UNSUPPORTED_PLATFORM',
     );
   });
+export const getSupportedLanguages =
+  ExpoIosTranslate?.getSupportedLanguages ??
+  (() => {
+    throw new TranslationError(
+      'expo-translate-text is not supported on web.',
+      'UNSUPPORTED_PLATFORM',
+    );
+  });
+export const getLanguageAvailability =
+  ExpoIosTranslate?.getLanguageAvailability ??
+  (() => {
+    throw new TranslationError(
+      'expo-translate-text is not supported on web.',
+      'UNSUPPORTED_PLATFORM',
+    );
+  });

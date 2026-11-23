@@ -20,10 +20,10 @@ expo install expo-translate-text
 
 ## Platform Support 📱
 
-| Platform | Translation Task       | Prepare Translation    | Translation Sheet        |
-| -------- | ---------------------- | ---------------------- | ------------------------ |
-| iOS      | ✅ Supported (iOS 18+) | ✅ Supported (iOS 18+) | ✅ Supported (iOS 17.4+) |
-| Android  | ✅ Supported           | ❌ Not Supported       | ❌ Not Supported         |
+| Platform | Translation Task       | Prepare Translation    | Translation Sheet        | Supported Languages    |
+| -------- | ---------------------- | ---------------------- | ------------------------ | ---------------------- |
+| iOS      | ✅ Supported (iOS 18+) | ✅ Supported (iOS 18+) | ✅ Supported (iOS 17.4+) | ✅ Supported (iOS 18+) |
+| Android  | ✅ Supported           | ❌ Not Supported       | ❌ Not Supported         | ✅ Supported           |
 
 ## Usage 🚀
 
@@ -81,6 +81,20 @@ const prepareTranslation = async () => {
     console.log('Preparation was cancelled.');
   }
 };
+```
+
+### Supported Languages
+
+```tsx
+import { onGetLanguageAvailability, onGetSupportedLanguages } from 'expo-translate-text';
+
+const languages = await onGetSupportedLanguages(); // ['ar-AE', 'ar-SA', 'da', 'de', ...]
+
+const status = await onGetLanguageAvailability({
+  sourceLangCode: 'en',
+  targetLangCode: 'es',
+});
+// 'installed' | 'supported' | 'unsupported'
 ```
 
 ### Translation Sheet (iOS Only)
@@ -152,6 +166,34 @@ Asks the system to prepare/download translation resources before translating.
 `Promise<{ status: 'prepared' } | { status: 'cancelled' }>`
 
 `cancelled` means the preparation flow ended before the language pair was prepared. Errors such as unsupported platform, invalid parameters, or Apple failing to prepare translation are thrown as `TranslationError`.
+
+---
+
+### onGetSupportedLanguages
+
+Returns the language codes the device can translate. iOS also lists regional variants (e.g. `en-GB`, `pt-PT`, `zh-TW`), Android only base languages.
+
+**Response:** `Promise<string[]>`
+
+---
+
+### onGetLanguageAvailability
+
+Checks whether a language pair can be translated and whether its models are already downloaded. It doesn't download anything.
+
+**Request:**
+
+| Parameter            | Type                             | Description                                                     |
+| -------------------- | -------------------------------- | --------------------------------------------------------------- |
+| `sourceLangCode`     | `string`                         | Source language code (e.g., 'en').                              |
+| `targetLangCode?`    | `string`                         | Target language code (e.g., 'es'). Defaults to `'en'`.          |
+| `preferredStrategy?` | `'lowLatency' \| 'highFidelity'` | Checks availability for that strategy on iOS 26.4+. Ignored elsewhere. |
+
+**Response:** `Promise<'installed' | 'supported' | 'unsupported'>`
+
+- `installed` — ready to translate offline
+- `supported` — supported, but models need to be downloaded first
+- `unsupported` — the pair can't be translated on this device
 
 ---
 

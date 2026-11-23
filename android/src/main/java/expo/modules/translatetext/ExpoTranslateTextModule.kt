@@ -2,9 +2,11 @@ package expo.modules.translatetext
 
 import android.os.Build
 import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.common.model.RemoteModelManager
 import com.google.mlkit.nl.languageid.LanguageIdentification
 import com.google.mlkit.nl.languageid.LanguageIdentificationOptions
 import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
 import expo.modules.kotlin.Promise
@@ -21,6 +23,41 @@ class ExpoTranslateTextModule : Module() {
     AsyncFunction("translateTask") { params: Map<String, Any>, promise: Promise ->
       translateTask(params, promise)
     }
+
+    AsyncFunction("getSupportedLanguages") {
+      TranslateLanguage.getAllLanguages().sorted()
+    }
+
+    AsyncFunction("getLanguageAvailability") { params: Map<String, Any>, promise: Promise ->
+      getLanguageAvailability(params, promise)
+    }
+  }
+
+  private fun getLanguageAvailability(params: Map<String, Any>, promise: Promise) {
+    val sourceLangCode = params["sourceLangCode"] as? String
+    if (sourceLangCode.isNullOrEmpty()) {
+      promise.reject(CodedException(code = "INVALID_PARAMETER", message = "A sourceLangCode is required", cause = null))
+      return
+    }
+    val targetLangCode = params["targetLangCode"] as? String ?: "en"
+
+    val source = TranslateLanguage.fromLanguageTag(sourceLangCode)
+    val target = TranslateLanguage.fromLanguageTag(targetLangCode)
+    if (source == null || target == null) {
+      promise.resolve(mapOf("status" to "unsupported"))
+      return
+    }
+
+    RemoteModelManager.getInstance()
+      .getDownloadedModels(TranslateRemoteModel::class.java)
+      .addOnSuccessListener { models ->
+        val downloaded = models.map { it.language }.toSet() + TranslateLanguage.ENGLISH
+        val status = if (source in downloaded && target in downloaded) "installed" else "supported"
+        promise.resolve(mapOf("status" to status))
+      }
+      .addOnFailureListener { e ->
+        promise.reject(CodedException(code = "MODEL_CHECK_FAILED", message = e.message ?: "Failed to check downloaded models", cause = e))
+      }
   }
 
   /**

@@ -256,6 +256,29 @@ public class ExpoTranslateTextModule: Module {
                 throw UnsupportedOSVersionException("18.0")
             }
         }
+
+        AsyncFunction("getSupportedLanguages") { () async throws -> [String] in
+            guard #available(iOS 18.0, *) else {
+                throw UnsupportedOSVersionException("18.0")
+            }
+            let languages = await LanguageAvailability().supportedLanguages
+            return Set(languages.map { $0.minimalIdentifier }).sorted()
+        }
+
+        AsyncFunction("getLanguageAvailability") { (params: [String: Any]) async throws -> [String: Any] in
+            guard #available(iOS 18.0, *) else {
+                throw UnsupportedOSVersionException("18.0")
+            }
+            guard let sourceLangCode = params["sourceLangCode"] as? String, !sourceLangCode.isEmpty else {
+                throw InvalidSourceLanguageException()
+            }
+            let status = await languageStatus(
+                sourceLanguage: sourceLangCode,
+                targetLanguage: params["targetLangCode"] as? String ?? "en",
+                preferredStrategy: params["preferredStrategy"] as? String
+            )
+            return ["status": status]
+        }
     }
 
     // MARK: - Private Helpers for Managing SwiftUI Views

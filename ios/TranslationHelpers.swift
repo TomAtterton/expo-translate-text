@@ -16,7 +16,7 @@ internal final class InvalidParameterException: Exception, @unchecked Sendable {
 }
 
 internal final class InvalidSourceLanguageException: Exception, @unchecked Sendable {
-  override var reason: String { "A sourceLangCode is required when preparing translation" }
+  override var reason: String { "A sourceLangCode is required" }
 }
 
 internal final class TranslationInProgressException: Exception, @unchecked Sendable {
@@ -111,6 +111,31 @@ func makeConfiguration(from props: PrepareProps) -> TranslationSession.Configura
     targetLanguage: props.targetLanguage,
     preferredStrategy: props.preferredStrategy
   )
+}
+
+@available(iOS 18.0, *)
+func languageStatus(
+  sourceLanguage: String,
+  targetLanguage: String,
+  preferredStrategy: String?
+) async -> String {
+  var availability = LanguageAvailability()
+  if #available(iOS 26.4, *), let preferredStrategy {
+    availability = LanguageAvailability(preferredStrategy: makePreferredStrategy(preferredStrategy))
+  }
+
+  let status = await availability.status(
+    from: Locale.Language(identifier: sourceLanguage),
+    to: Locale.Language(identifier: targetLanguage)
+  )
+  switch status {
+  case .installed:
+    return "installed"
+  case .supported:
+    return "supported"
+  default:
+    return "unsupported"
+  }
 }
 
 @available(iOS 26.4, *)
